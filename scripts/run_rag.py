@@ -1,0 +1,201 @@
+"""Run RAG agent baseline for continual KGQA evaluation.
+
+Indexes each KG task snapshot into ChromaDB, generates KGQA questions
+from test triples, and evaluates the agent on all tasks seen so far.
+
+Usage:
+    # Quick mode: 10 questions, retrieval-only (no LLM)
+    python scripts/run_rag.py --quick
+
+    # Full run with LLM
+    python scripts/run_rag.py --seeds 42 123 456 789 1024
+
+    # Retrieval-only (no LLM needed)
+    python scripts/run_rag.py --no-llm --questions-per-task 200
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+SEEDS = [42, 123, 456, 789, 1024]
+
+
+def run_rag_evaluation(
+    task_seq: dict,
+    task_names: list[str],
+    questions_per_task: int,
+    use_llm: bool,
+    llm_name: str,
+    embedding_model: str,
+    seed: int,
+) -> dict:
+    """Run RAG evaluation across all tasks for one seed.
+
+    Args:
+        task_seq: Task sequence data.
+        task_names: Ordered task names.
+        questions_per_task: Number of QA pairs per task.
+        use_llm: Whether to use LLM for generation.
+        llm_name: HuggingFace model ID.
+        embedding_model: Sentence embedding model name.
+        seed: Random seed.
+
+    Returns:
+        Dict with results_matrix, per-task metrics, CL metrics.
+    """
+    from src.baselines.rag_agent import BiomedicalRAGAgent
+    from src.data.kgqa import generate_kgqa_questions
+    from src.evaluation.metrics import evaluate_continual_learning
+
+    np.random.seed(seed)
+
+    # Initialize agent (new for each seed for clean evaluation)
+    agent = BiomedicalRAGAgent(
+        llm_name=llm_name,
+        embedding_model=embedding_model,
+        use_llm=use_llm,
+    )
+
+    num_tasks = len(task_names)
+    # R[i][j] = token_f1 on task j after indexing through task i
+    results_matrix = np.zeros((num_tasks, num_tasks))
+
+    # Generate QA questions for each task from test triples
+    qa_per_task = {}
+    for task_name, task_data in task_seq.items():
+        qa_per_task[task_name] = generate_kgqa_questions(
+            task_data["test"], n=questions_per_task, seed=seed,
+        )
+
+    for task_idx, task_name in enumerate(task_names):
+        logger.info(f"=== Task {task_idx + 1}/{num_tasks}: {task_name} ===")
+        task_data = task_seq[task_name]
+
+        # Index training triples for this task
+        if task_idx == 0:
+            agent.index_kg_snapshot(task_data["train"])
+        else:
+            agent.update_with_new_knowledge(task_data["train"])
+
+        # Evaluate on all tasks seen so far
+        for eval_idx in range(task_idx + 1):
+            eval_name = task_names[eval_idx]
+            qa_pairs = qa_per_task[eval_name]
+
+            metrics = agent.evaluate_kgqa(qa_pairs)
+            # Use token_f1 as the primary metric for the results matrix
+            results_matrix[task_idx, eval_idx] = metrics["token_f1"]
+            logger.info(f"  Eval {eval_name}: F1={metrics['token_f1']:.4f}, "
+                        f"EM={metrics['exact_match']:.4f}")
+
+    # Compute CL metrics
+    cl_metrics = evaluate_continual_learning(results_matrix, task_names)
+
+    return {
+        "results_matrix": results_matrix.tolist(),
+        "task_names": task_names,
+        "cl_metrics": cl_metrics,
+        "seed": seed,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run RAG agent for KGQA")
+    parser.add_argument("--tasks-dir", default="data/benchmark/tasks")
+    parser.add_argument("--task-names", nargs="+", default=None)
+    parser.add_argument("--llm", default="meta-llama/Meta-Llama-3-8B-Instruct",
+                        help="HuggingFace LLM model ID")
+    parser.add_argument("--embedding-model",
+                        default="pritamdeka/S-PubMedBert-MS-MARCO")
+    parser.add_argument("--questions-per-task", type=int, default=200)
+    parser.add_argument("--no-llm", action="store_true",
+                        help="Use retrieval-only mode (no LLM)")
+    parser.add_argument("--output-dir", default="results")
+    parser.add_argument("--seeds", nargs="+", type=int, default=[42])
+    parser.add_argument("--quick", action="store_true",
+                        help="Quick mode: 10 questions, retrieval-only")
+    args = parser.parse_args()
+
+    if args.quick:
+        args.questions_per_task = 10
+        args.no_llm = True
+        logger.info("Quick mode: 10 questions, retrieval-only")
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    from src.baselines._base import load_task_sequence, build_global_mappings
+
+    # Load tasks
+    task_seq = load_task_sequence(args.tasks_dir, args.task_names)
+    task_names = list(task_seq.keys())
+    entity_to_id, relation_to_id = build_global_mappings(task_seq)
+
+    logger.info(f"Tasks: {task_names}")
+    logger.info(f"Entities: {len(entity_to_id):,}, Relations: {len(relation_to_id)}")
+    logger.info(f"Questions per task: {args.questions_per_task}")
+    logger.info(f"LLM: {'disabled' if args.no_llm else args.llm}")
+
+    all_seed_results = []
+
+    for seed in args.seeds:
+        logger.info(f"\n{'='*60}")
+        logger.info(f"RAG Seed {seed}")
+        logger.info(f"{'='*60}")
+        start = time.time()
+
+        result = run_rag_evaluation(
+            task_seq=task_seq,
+            task_names=task_names,
+            questions_per_task=args.questions_per_task,
+            use_llm=not args.no_llm,
+            llm_name=args.llm,
+            embedding_model=args.embedding_model,
+            seed=seed,
+        )
+
+        elapsed = time.time() - start
+        result["training_time_s"] = elapsed
+
+        cl = result["cl_metrics"]
+        logger.info(f"  AP={cl['Average Performance (AP)']:.4f}, "
+                    f"AF={cl['Average Forgetting (AF)']:.4f}, "
+                    f"REM={cl['Remembering (REM)']:.4f} ({elapsed:.0f}s)")
+
+        all_seed_results.append(result)
+
+    # Save results
+    mode = "retrieval_only" if args.no_llm else "full_rag"
+    result_path = output_dir / f"rag_{mode}.json"
+    with open(result_path, "w") as f:
+        json.dump({
+            "method": "rag_agent",
+            "mode": mode,
+            "llm": args.llm if not args.no_llm else None,
+            "embedding_model": args.embedding_model,
+            "questions_per_task": args.questions_per_task,
+            "task_names": task_names,
+            "seeds": args.seeds,
+            "results": all_seed_results,
+        }, f, indent=2, default=str)
+    logger.info(f"Results saved to {result_path}")
+
+
+if __name__ == "__main__":
+    main()

@@ -93,6 +93,84 @@ def compute_link_prediction_metrics(
 
 
 # ---------------------------------------------------------------------------
+# KGQA metrics
+# ---------------------------------------------------------------------------
+
+def compute_exact_match(prediction: str, ground_truth: str) -> float:
+    """Compute exact match after normalization.
+
+    Args:
+        prediction: Predicted answer string.
+        ground_truth: Gold answer string.
+
+    Returns:
+        1.0 if match, 0.0 otherwise.
+    """
+    import re
+    pred = re.sub(r"[^\w\s]", "", prediction.lower().strip())
+    gold = re.sub(r"[^\w\s]", "", ground_truth.lower().strip())
+    pred = " ".join(pred.split())
+    gold = " ".join(gold.split())
+    return 1.0 if pred == gold else 0.0
+
+
+def compute_token_f1(prediction: str, ground_truth: str) -> float:
+    """Compute token-level F1 between prediction and ground truth.
+
+    Args:
+        prediction: Predicted answer string.
+        ground_truth: Gold answer string.
+
+    Returns:
+        Token F1 score in [0, 1].
+    """
+    import re
+    from collections import Counter
+    pred = " ".join(re.sub(r"[^\w\s]", "", prediction.lower().strip()).split())
+    gold = " ".join(re.sub(r"[^\w\s]", "", ground_truth.lower().strip()).split())
+    pred_tokens = pred.split()
+    gold_tokens = gold.split()
+    if not pred_tokens and not gold_tokens:
+        return 1.0
+    if not pred_tokens or not gold_tokens:
+        return 0.0
+    common = Counter(pred_tokens) & Counter(gold_tokens)
+    num_common = sum(common.values())
+    if num_common == 0:
+        return 0.0
+    precision = num_common / len(pred_tokens)
+    recall = num_common / len(gold_tokens)
+    return 2 * precision * recall / (precision + recall)
+
+
+# ---------------------------------------------------------------------------
+# Node classification metrics
+# ---------------------------------------------------------------------------
+
+def compute_nc_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+) -> dict[str, float]:
+    """Compute node classification metrics.
+
+    Args:
+        y_true: Ground truth integer labels.
+        y_pred: Predicted integer labels.
+
+    Returns:
+        Dict with 'accuracy', 'macro_f1', 'weighted_f1'.
+    """
+    from sklearn.metrics import accuracy_score, f1_score
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    return {
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "macro_f1": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
+        "weighted_f1": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Continual learning metrics
 # ---------------------------------------------------------------------------
 

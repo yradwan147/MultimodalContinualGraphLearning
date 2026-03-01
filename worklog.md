@@ -558,7 +558,7 @@ All components import and run correctly:
 #### SLURM Scripts Updated (matching user's IBEX config)
 All 4 SLURM scripts updated to user's preferred IBEX configuration:
 - `slurm/base_job.sh`, `slurm/run_baseline.sh`, `slurm/run_cmkl.sh`, `slurm/run_ablations.sh`
-- Config: `--partition=batch --gres=gpu:1 --cpus-per-gpu=2 --mem=10G --time=24:00:00`
+- Config: `--partition=batch --gres=gpu:1 --cpus-per-gpu=2 --mem=32G --time=24:00:00`
 - Shebang: `#!/bin/bash --login`
 - Conda: `source ~/miniconda3/bin/activate && conda activate mcgl`
 - No specific GPU type requested (generic GPU, no V100/A100 hogging)
@@ -568,9 +568,205 @@ All 4 SLURM scripts updated to user's preferred IBEX configuration:
 - `run_ablations.py --ablation struct_only --quick`: AP=0.0870 (struct only < full CMKL, as expected)
 - `generate_tables.py`: Successfully generates LaTeX and Markdown tables from existing result JSONs
 
-### Next Steps (for IBEX)
-To run the full experiment matrix, submit these jobs on IBEX:
-1. `sbatch slurm/run_baseline.sh all TransE` — All 4 baselines with 5 seeds
-2. `sbatch slurm/run_cmkl.sh DistMult` — CMKL with 5 seeds
-3. `sbatch slurm/run_ablations.sh all` — All 7 ablation studies
-4. After results: `python scripts/generate_tables.py --format both`
+---
+
+## 2026-03-01 Session 6 continued - IBEX Preparation & Fixes
+
+### Issue: OOM on IBEX (10G RAM)
+- **Error:** `slurmstepd: error: Detected 1 oom_kill event in StepId=45763075.batch`
+- **Root cause:** PyKEEN evaluation scores against all ~24K entities, creating large intermediate tensors exceeding 10G.
+- **Fix:** Bumped `--mem` from 10G to 32G across all SLURM scripts. Split monolithic "all" jobs into 12 individual parallel jobs.
+
+### Changes Made
+- All SLURM scripts: `--mem=10G` → `--mem=32G`
+- `slurm/submit_all.sh` (NEW): Master script that submits 12 independent jobs (4 baselines + 1 CMKL + 7 ablations)
+- `slurm/run_baseline.sh`: Now takes a single baseline name (not "all")
+- `slurm/run_ablations.sh`: Now takes a single ablation name (not "all")
+- Time limits: Reset to 24h per user request ("I really dont want to have to rerun")
+
+### Git History Cleanup
+- Removed `Co-Authored-By` lines from all 7 commits via `git filter-branch`
+- User preference saved: no Co-Authored-By in future commits
+
+### IBEX Job Submission Plan
+12 parallel jobs:
+- 4 baselines: `naive_sequential`, `joint_training`, `ewc`, `experience_replay` (each with TransE, 5 seeds)
+- 1 CMKL: DistMult decoder, 5 seeds
+- 7 ablations: `struct_only`, `text_only`, `concat_fusion`, `global_ewc`, `random_replay`, `buffer_size_sweep`, `lambda_sweep`
+
+---
+
+## 2026-03-01 Session 7 - Comprehensive Project Audit
+
+### Audit: PDF Deliverables vs Actual Implementation
+
+Conducted full cross-reference of all 50 PDF pages, all 7 phase plans, and all source code files.
+
+#### Fully Implemented (no gaps):
+- Data pipeline (download, temporal diff, task sequences, splits, features)
+- 4/6 KGE baselines (naive sequential, joint training, EWC, experience replay)
+- Full CMKL stack (encoders, fusion, decoders, modality-aware EWC, multimodal replay)
+- Evaluation suite (CL metrics, statistical tests, visualization)
+- Experiment scripts (run_baselines, run_cmkl, run_ablations, generate_tables)
+- SLURM scripts (12 parallel jobs for IBEX)
+- Config files (base, ewc, replay, cmkl YAMLs)
+- Notebooks 01 (EDA) and 02 (benchmark stats)
+
+#### Identified Gaps:
+1. **`src/baselines/rag_agent.py`** - Complete stub. Needed for E6 (RAG) and E8 (CMKL+RAG). Priority: Medium.
+2. **`src/baselines/lkge.py`** - `parse_results()` incomplete. Needed for E5. Priority: Medium.
+3. **`src/continual/distillation.py`** - Stub. Explicitly optional in PDF. Priority: Low.
+4. **`src/utils/logging.py`** - Stub. Scripts use stdlib logging directly. Priority: Low.
+5. **Node Classification (Task 3)** - Not implemented anywhere. PDF marks it optional. Priority: Low-Medium.
+6. **Notebooks 03 and 04** - Placeholders awaiting Phase 5 results. Priority: Blocked on IBEX.
+
+#### Documentation Updates Made This Session:
+- `docs/architecture.md`: Fully rewritten with CMKL architecture diagram, component details, hyperparameters, parameter counts
+- `worklog.md`: Added missing sessions (OOM fix, SLURM updates, audit)
+
+#### Documentation Still Needing Update:
+- `docs/experiment-results.md`: Empty, waiting on IBEX results
+- `docs/literature-review.md`: ~60% complete (categories 7-8 incomplete)
+
+### Next Steps
+- Wait for IBEX results from 12 jobs
+- When results arrive: populate `docs/experiment-results.md`, run `generate_tables.py`, fill notebooks 03-04
+- Consider implementing RAG agent (if KGQA task needed for papers)
+- Phase 6-7: Paper writing (after experiments complete)
+
+---
+
+## 2026-03-01 Session 8 - Fill All Code Gaps + SLURM OOM Fix
+
+### Context
+All 12 IBEX jobs OOM'd due to GPU VRAM limits on generic GPUs (~16GB). Switched to V100 (32GB).
+Full audit identified 5 code gaps needed to complete the experiment matrix from the PDF (8 experiments x 3 tasks).
+
+### Changes Made
+
+#### Step 1: Knowledge Distillation (~100 lines)
+- `src/continual/distillation.py`: Implemented `KnowledgeDistillation` class with:
+  - `compute_distillation_loss()`: KL divergence with temperature scaling (T^2 * KL)
+  - `compute_combined_loss()`: alpha * L_hard + (1-alpha) * L_soft
+  - `create_teacher_copy()`: Deep-copies and freezes model for teacher
+- `src/models/cmkl.py`: Added distillation integration:
+  - Config keys: `use_distillation`, `distillation_temperature` (2.0), `distillation_alpha` (0.5)
+  - `train_continually()`: Creates frozen teacher copy after each task
+  - `_train_epoch()`: Computes teacher/student all-entity scores, adds distillation loss
+  - Added optional `nc_classifier` head (Linear-ReLU-Dropout-Linear) gated by `use_nc` config
+  - Added `classify_nodes()` method
+- `scripts/run_ablations.py`: Added "distillation" to ABLATIONS list + dispatch
+- `scripts/run_cmkl.py`: Added `--use-distillation`, `--distillation-temperature`, `--distillation-alpha` CLI args
+- **Smoke test**: distillation loss computation, teacher copy freezing - PASS
+
+#### Step 2: LKGE Result Parsing + Integration (~150 lines)
+- `src/baselines/lkge.py`: Rewrote with:
+  - `parse_results()`: 3 regex patterns for LKGE output (Snapshot line, test-on-snapshot blocks, tabular)
+  - `_parse_log_content()`: Extracts MRR, Hits@1/3/10 per snapshot, builds results matrix
+  - `run_and_parse()`: Runs LKGE as subprocess, captures output, parses results
+- `scripts/run_lkge.py` (NEW): CLI with --tasks-dir, --model, --lkge-dir, --seeds, --quick
+  - Quick mode tests format conversion only (no LKGE subprocess needed)
+  - Full mode: converts data -> runs LKGE -> parses -> computes CL metrics -> saves JSON
+- `slurm/run_lkge.sh` (NEW): V100, auto-clones LKGE repo if missing
+- **Smoke test**: Format conversion + log parsing - PASS
+
+#### Step 3: RAG Agent + KGQA Pipeline (~400 lines)
+- `src/data/kgqa.py` (NEW ~150 lines):
+  - `QUESTION_TEMPLATES`: 24 relation-type -> NL question mappings
+  - `generate_kgqa_questions()`: Converts triples to QA pairs using templates
+  - `generate_continual_kgqa_dataset()`: Per-task QA sets aligned with CL sequence
+- `src/baselines/rag_agent.py`: Full implementation:
+  - `_init_vectorstore()`: ChromaDB + SentenceTransformer (PubMedBERT)
+  - `_init_llm()`: HuggingFace text-gen pipeline (Llama-3-8B), fallback to retrieval-only
+  - `index_kg_snapshot()`: Triple-to-NL conversion, batch indexing (40K/batch)
+  - `update_with_new_knowledge()`: Incremental indexing (no retraining)
+  - `answer_question()`: Retrieve top-K -> LLM generation or majority-vote extraction
+  - `evaluate_kgqa()`: Batch eval with EM + token-F1
+  - `compute_exact_match()`, `compute_token_f1()`: Normalized string matching
+- `src/evaluation/metrics.py`: Added `compute_exact_match()`, `compute_token_f1()`, `compute_nc_metrics()`
+- `scripts/run_rag.py` (NEW): CLI with --no-llm, --questions-per-task, --quick
+- `slurm/run_rag.sh` (NEW): V100, 64G RAM, 4 CPUs (LLM needs more resources)
+- **Smoke test**: KGQA generation, EM/F1 computation - PASS
+
+#### Step 4: Node Classification Support (~350 lines)
+- `src/data/node_classification.py` (NEW ~150 lines):
+  - `get_label_map()`: PrimeKG 10 node types -> int (0-9)
+  - `load_node_types()`: From node_index_map.csv or KG CSV extraction
+  - `build_nc_dataset()`: Per-task NC datasets with train/val/test masks
+- `src/baselines/nc_baseline.py` (NEW ~100 lines):
+  - `NCClassifier`: 2-layer MLP (Linear-ReLU-Dropout-Linear)
+  - `NCBaseline`: Trains classifier on frozen embeddings, returns accuracy/macro_f1/weighted_f1
+  - `extract_pykeen_embeddings()`: Gets entity embeddings from PyKEEN models
+- `scripts/run_nc.py` (NEW ~250 lines):
+  - For KGE baselines: train KGE continually -> extract embeddings -> train MLP classifier
+  - For CMKL: use fused embeddings -> train MLP classifier
+  - Builds NC results matrix with macro_f1, computes CL metrics
+- `slurm/run_nc.sh` (NEW): V100, takes $METHOD argument
+
+#### Step 5: Logging Verified
+- `src/utils/logging.py`: Already fully implemented with `setup_logger()` and `ExperimentTracker`
+
+#### Step 6: SLURM Final Update
+- All 7 SLURM scripts: Added `export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512`
+- All 7 SLURM scripts: Output logs to `slurm/slurm_logs/` directory
+- All 7 SLURM scripts: `--gres=gpu:v100:1` (32GB VRAM)
+- `slurm/submit_all.sh`: Expanded from 12 to **20 jobs**:
+  - Link Prediction: 4 baselines + 1 LKGE + 1 CMKL + 8 ablations = 14 jobs
+  - KGQA: 1 RAG agent = 1 job
+  - Node Classification: 4 baselines + 1 CMKL = 5 jobs
+
+### Smoke Test Results
+| Test | Status |
+|------|--------|
+| Distillation loss + teacher copy | PASS |
+| LKGE format conversion + log parsing | PASS |
+| KGQA question generation | PASS |
+| EM/F1 metrics | PASS |
+| NC label map + classifier + eval | PASS |
+| SLURM scripts: all have v100 + PYTORCH_CUDA_ALLOC_CONF | PASS |
+| submit_all.sh: 20 sbatch commands | PASS |
+
+### New/Modified Files Summary
+| Action | File |
+|--------|------|
+| Modify | `src/continual/distillation.py` |
+| Modify | `src/models/cmkl.py` |
+| Modify | `src/baselines/lkge.py` |
+| Modify | `src/baselines/rag_agent.py` |
+| Modify | `src/evaluation/metrics.py` |
+| Modify | `scripts/run_ablations.py` |
+| Modify | `scripts/run_cmkl.py` |
+| Create | `src/data/kgqa.py` |
+| Create | `src/data/node_classification.py` |
+| Create | `src/baselines/nc_baseline.py` |
+| Create | `scripts/run_lkge.py` |
+| Create | `scripts/run_rag.py` |
+| Create | `scripts/run_nc.py` |
+| Create | `slurm/run_lkge.sh` |
+| Create | `slurm/run_rag.sh` |
+| Create | `slurm/run_nc.sh` |
+| Modify | `slurm/submit_all.sh` |
+| Modify | `slurm/base_job.sh` |
+| Modify | `slurm/run_baseline.sh` |
+| Modify | `slurm/run_cmkl.sh` |
+| Modify | `slurm/run_ablations.sh` |
+
+#### Phase Plan Updates (Paper Writing Methodology)
+- `.claude-plans/phase6-paper-a-benchmark.md`: Completely rewritten to follow `~/.claude/skills/write-research-paper/SKILL.md` methodology
+  - Phases 0-5 mapped to our project: context validation, deep project scan, paper planning, output directory, section-by-section writing, compilation
+  - Section-by-section spec: 6-part abstract, 5-paragraph intro, \paragraph{} related work, benchmark construction, experiments, conclusion
+  - Comparison Table 1 (ours vs prior CGL benchmarks with \cmark/\xmark)
+  - Custom LaTeX commands: \ours{PrimeKG-CL}, stat macros for consistent numbers
+  - NeurIPS checklist, supplementary material template
+  - 20+ key references mapped across 5 categories
+- `.claude-plans/phase7-paper-b-method.md`: Completely rewritten same way
+  - CMKL method paper: architecture overview, modality-aware EWC, multimodal replay, cross-attention fusion
+  - Algorithm pseudocode box for CMKL training procedure
+  - 8 ablation studies table, sensitivity analysis figures
+  - Per-modality Fisher visualization, forgetting comparison
+  - 20+ key references across 6 categories
+
+### Next Steps
+- User resubmits `bash slurm/submit_all.sh` on IBEX (20 jobs)
+- When results arrive: populate experiment-results.md, generate tables/figures
+- Phase 6-7: Paper writing (follow updated phase plans with SKILL.md methodology)

@@ -65,6 +65,12 @@ def main() -> None:
     parser.add_argument("--replay-buffer-size", type=int, default=1000)
     parser.add_argument("--replay-weight", type=float, default=0.5)
 
+    # Distillation hyperparameters
+    parser.add_argument("--use-distillation", action="store_true",
+                        help="Enable knowledge distillation")
+    parser.add_argument("--distillation-temperature", type=float, default=2.0)
+    parser.add_argument("--distillation-alpha", type=float, default=0.5)
+
     parser.add_argument(
         "--seeds", nargs="+", type=int, default=[42],
         help="Random seeds (default: [42])",
@@ -112,6 +118,9 @@ def main() -> None:
         "lambda_mol": args.lambda_mol,
         "replay_buffer_size": args.replay_buffer_size,
         "replay_weight": args.replay_weight,
+        "use_distillation": args.use_distillation,
+        "distillation_temperature": args.distillation_temperature,
+        "distillation_alpha": args.distillation_alpha,
         "lr": args.lr,
         "num_epochs": args.num_epochs,
         "batch_size": args.batch_size,

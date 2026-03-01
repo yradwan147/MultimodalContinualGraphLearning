@@ -1,12 +1,12 @@
 #!/bin/bash --login
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:v100:1
 #SBATCH --partition=batch
 #SBATCH --cpus-per-gpu=2
 #SBATCH --mem=32G
 #SBATCH -J mcgl_bl
-#SBATCH -o mcgl_bl_%J.out
+#SBATCH -o slurm/slurm_logs/mcgl_bl_%J.out
 
 # Run a SINGLE baseline on IBEX
 # Usage:
@@ -16,7 +16,9 @@
 source ~/miniconda3/bin/activate
 conda activate mcgl
 
-mkdir -p results
+mkdir -p results slurm/slurm_logs
+
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 BASELINE=${1:?Usage: sbatch run_baseline.sh <baseline_name> [model]}
 MODEL=${2:-TransE}

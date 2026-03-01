@@ -1,12 +1,12 @@
 #!/bin/bash --login
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:v100:1
 #SBATCH --partition=batch
 #SBATCH --cpus-per-gpu=2
 #SBATCH --mem=32G
 #SBATCH -J mcgl_cmkl
-#SBATCH -o mcgl_cmkl_%J.out
+#SBATCH -o slurm/slurm_logs/mcgl_cmkl_%J.out
 
 # Run CMKL experiment on IBEX
 # Usage: sbatch slurm/run_cmkl.sh [decoder]
@@ -14,7 +14,9 @@
 source ~/miniconda3/bin/activate
 conda activate mcgl
 
-mkdir -p results checkpoints
+mkdir -p results checkpoints slurm/slurm_logs
+
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 DECODER=${1:-DistMult}
 

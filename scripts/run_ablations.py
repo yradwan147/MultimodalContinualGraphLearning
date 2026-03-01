@@ -48,6 +48,7 @@ ABLATIONS = [
     "random_replay",
     "buffer_size_sweep",
     "lambda_sweep",
+    "distillation",
 ]
 
 # Buffer sizes to sweep
@@ -209,6 +210,15 @@ def run_lambda_sweep(config, task_seq, e2id, r2id, seeds, device):
     return all_sweep_results
 
 
+def run_distillation(config, task_seq, e2id, r2id, seeds, device):
+    """Ablation 8: Add knowledge distillation to CMKL."""
+    c = {**config,
+         "use_distillation": True,
+         "distillation_temperature": 2.0,
+         "distillation_alpha": 0.5}
+    return run_single_config(c, task_seq, e2id, r2id, seeds, device, "distillation")
+
+
 ABLATION_DISPATCH = {
     "struct_only": run_struct_only,
     "text_only": run_text_only,
@@ -217,6 +227,7 @@ ABLATION_DISPATCH = {
     "random_replay": run_random_replay,
     "buffer_size_sweep": run_buffer_size_sweep,
     "lambda_sweep": run_lambda_sweep,
+    "distillation": run_distillation,
 }
 
 

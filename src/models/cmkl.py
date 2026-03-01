@@ -38,6 +38,7 @@ from src.models.fusion import CrossModalAttentionFusion, ConcatenationFusion
 from src.models.decoders import TransEDecoder, DistMultDecoder, BilinearDecoder
 from src.continual.modality_ewc import ModalityAwareEWC
 from src.continual.multimodal_replay import MultimodalMemoryBuffer
+from src.continual.distillation import KnowledgeDistillation
 from src.baselines._base import (
     load_task_sequence,
     build_global_mappings,
@@ -73,6 +74,9 @@ DEFAULT_CONFIG = {
     "dropout": 0.1,
     "margin": 1.0,
     "neg_ratio": 1,
+    "use_distillation": False,
+    "distillation_temperature": 2.0,
+    "distillation_alpha": 0.5,
 }
 
 
@@ -140,6 +144,21 @@ class CMKL(nn.Module):
         # These are initialized lazily during training
         self.ewc: ModalityAwareEWC | None = None
         self.replay_buffer: MultimodalMemoryBuffer | None = None
+
+        # --- Optional: Knowledge Distillation ---
+        self.distillation: KnowledgeDistillation | None = None
+        self._teacher_model: CMKL | None = None
+
+        # --- Optional: Node Classification head ---
+        self.nc_classifier: nn.Sequential | None = None
+        if c.get("use_nc", False):
+            num_classes = c.get("num_nc_classes", 10)
+            self.nc_classifier = nn.Sequential(
+                nn.Linear(c["embedding_dim"], c["embedding_dim"]),
+                nn.ReLU(),
+                nn.Dropout(c["dropout"]),
+                nn.Linear(c["embedding_dim"], num_classes),
+            )
 
     def _init_encoders(self) -> None:
         """Initialize encoders once data dimensions are known."""
@@ -308,6 +327,27 @@ class CMKL(nn.Module):
             r = self.relation_emb(relation_ids)
             return self.decoder(h, r, t)
 
+    def classify_nodes(
+        self,
+        node_embeddings: torch.Tensor,
+        node_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        """Classify nodes using the optional NC head.
+
+        Args:
+            node_embeddings: [N, D] fused node embeddings.
+            node_ids: [B] indices of nodes to classify.
+
+        Returns:
+            Logits [B, num_classes].
+
+        Raises:
+            RuntimeError: If NC head is not initialized (use_nc=False).
+        """
+        if self.nc_classifier is None:
+            raise RuntimeError("NC classifier not initialized. Set use_nc=True in config.")
+        return self.nc_classifier(node_embeddings[node_ids])
+
     def compute_task_loss(
         self,
         node_embeddings: torch.Tensor,
@@ -413,6 +453,16 @@ class CMKL(nn.Module):
             strategy=c["replay_strategy"],
         )
 
+        # Initialize distillation if enabled
+        if c.get("use_distillation", False):
+            self.distillation = KnowledgeDistillation(
+                temperature=c.get("distillation_temperature", 2.0),
+                alpha=c.get("distillation_alpha", 0.5),
+            )
+            self._teacher_model = None
+            logger.info("Knowledge distillation enabled (T=%.1f, alpha=%.2f)",
+                        self.distillation.temperature, self.distillation.alpha)
+
         # Move multimodal features to device
         if text_embeddings is not None:
             text_embeddings = text_embeddings.to(device)
@@ -499,7 +549,12 @@ class CMKL(nn.Module):
                 task_id=task_idx,
             )
 
-            # 3. Evaluate on all tasks seen so far
+            # 3. Create teacher copy for distillation on the next task
+            if self.distillation is not None:
+                self._teacher_model = KnowledgeDistillation.create_teacher_copy(self)
+                self._teacher_model.to(device)
+
+            # 4. Evaluate on all tasks seen so far
             self.eval()
             for eval_idx in range(task_idx + 1):
                 eval_name = task_names[eval_idx]
@@ -602,6 +657,50 @@ class CMKL(nn.Module):
             if self.ewc is not None:
                 ewc_penalty = self.ewc.ewc_loss()
                 loss = loss + ewc_penalty
+
+            # Distillation loss
+            if (self.distillation is not None
+                    and self._teacher_model is not None):
+                with torch.no_grad():
+                    teacher_h = self._teacher_model.forward(
+                        edge_index, edge_type,
+                        text_embeddings, mol_fingerprints,
+                        node_has_text, node_has_mol,
+                    )
+                # Compute scores for batch triples over all entities
+                heads = batch[:, 0]
+                rels = batch[:, 1]
+                # Student all-entity scores
+                if self.config["decoder_type"] == "Bilinear":
+                    s_h = h_fused[heads]
+                    s_M = self.decoder.relation_matrices[rels]
+                    s_hM = torch.einsum("bi,bij->bj", s_h, s_M)
+                    student_scores = s_hM @ h_fused.T
+                elif self.config["decoder_type"] == "TransE":
+                    s_query = h_fused[heads] + self.relation_emb(rels)
+                    student_scores = -torch.cdist(
+                        s_query, h_fused, p=self.decoder.p_norm)
+                else:  # DistMult
+                    s_query = h_fused[heads] * self.relation_emb(rels)
+                    student_scores = s_query @ h_fused.T
+
+                # Teacher all-entity scores (same formulation)
+                with torch.no_grad():
+                    if self.config["decoder_type"] == "Bilinear":
+                        t_h = teacher_h[heads]
+                        t_M = self._teacher_model.decoder.relation_matrices[rels]
+                        t_hM = torch.einsum("bi,bij->bj", t_h, t_M)
+                        teacher_scores = t_hM @ teacher_h.T
+                    elif self.config["decoder_type"] == "TransE":
+                        t_query = teacher_h[heads] + self._teacher_model.relation_emb(rels)
+                        teacher_scores = -torch.cdist(
+                            t_query, teacher_h, p=self._teacher_model.decoder.p_norm)
+                    else:  # DistMult
+                        t_query = teacher_h[heads] * self._teacher_model.relation_emb(rels)
+                        teacher_scores = t_query @ teacher_h.T
+
+                loss = self.distillation.compute_combined_loss(
+                    loss, student_scores, teacher_scores)
 
             # Replay loss
             if self.replay_buffer is not None and len(self.replay_buffer) > 0:
