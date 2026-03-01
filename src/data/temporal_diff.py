@@ -151,9 +151,10 @@ def normalize_entity_ids(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalize entity IDs across snapshots.
 
-    Ensures consistent ID types (string) for reliable comparison.
-    If database ID schemes changed between versions, uses entity names
-    as secondary keys to build a mapping.
+    Handles the PrimeKG disease ID grouping mismatch: t0 uses grouped
+    MONDO IDs (e.g., "13924_12592_14672") while rebuilt t1 uses individual
+    MONDO IDs (e.g., "13924"). Maps t1's individual disease IDs to t0's
+    grouped super-node IDs where possible.
 
     Args:
         kg_old: Older snapshot DataFrame.
@@ -171,6 +172,46 @@ def normalize_entity_ids(
     for col in ["relation"]:
         kg_old[col] = kg_old[col].astype(str).str.strip()
         kg_new[col] = kg_new[col].astype(str).str.strip()
+
+    # Build mapping from individual MONDO IDs → grouped super-node IDs.
+    # t0 has MONDO_grouped disease IDs like "13924_12592_14672".
+    # t1 (rebuilt) has individual IDs like "13924".
+    disease_rows = kg_old[
+        (kg_old["x_source"] == "MONDO_grouped") | (kg_old["y_source"] == "MONDO_grouped")
+    ] if "x_source" in kg_old.columns else pd.DataFrame()
+
+    if len(disease_rows) > 0:
+        grouped_ids = set()
+        for col in ["x_id", "y_id"]:
+            src_col = col.replace("id", "source")
+            mask = kg_old[src_col] == "MONDO_grouped"
+            grouped_ids.update(kg_old.loc[mask, col].unique())
+
+        # Map individual → grouped
+        individual_to_grouped: dict[str, str] = {}
+        for gid in grouped_ids:
+            parts = str(gid).split("_")
+            if len(parts) > 1:
+                for part in parts:
+                    individual_to_grouped[part] = str(gid)
+
+        if individual_to_grouped:
+            mapped = 0
+            # Map t1 disease IDs to t0's grouped IDs
+            for col in ["x_id", "y_id"]:
+                src_col = col.replace("id", "source")
+                if src_col in kg_new.columns:
+                    mask = kg_new[src_col] == "MONDO"
+                    ids = kg_new.loc[mask, col]
+                    new_ids = ids.map(lambda x: individual_to_grouped.get(str(x), x))
+                    changed = (new_ids != ids).sum()
+                    mapped += changed
+                    kg_new.loc[mask, col] = new_ids
+                    # Update source to MONDO_grouped for mapped IDs
+                    kg_new.loc[mask & (new_ids != ids), src_col] = "MONDO_grouped"
+
+            if mapped > 0:
+                logger.info(f"Mapped {mapped} t1 disease IDs to t0 grouped super-node IDs")
 
     return kg_old, kg_new
 

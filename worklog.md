@@ -278,3 +278,146 @@ Used for: cross-session context recovery, progress reporting to Prof. Zhang.
 - Phase 3: Implement baseline methods (Naive Sequential, Joint Training, EWC, Experience Replay, LKGE, RAG)
 - For real t1: Clone PrimeKG repo, get DrugBank academic license, rebuild from July 2023 sources
 - Text embeddings (BiomedBERT) should be computed on IBEX with GPU
+
+---
+
+## 2026-03-01 Session 5 - PrimeKG Build Pipeline Research
+
+### Research Conducted
+- Deep analysis of the PrimeKG GitHub repository (https://github.com/mims-harvard/PrimeKG)
+- Read and documented every processing script, the build notebook, the data download script
+- Mapped every database to its edge types and node types
+- Assessed feasibility of partial rebuild without DrugBank, UMLS, and OMIM
+
+### Key Findings
+1. **Build pipeline is a Jupyter notebook** (`knowledge_graph/build_graph.ipynb`), not a standalone script
+2. **20 databases** feed into the build, but only **3 require authentication**: DrugBank, UMLS, OMIM
+3. **DrugBank is deeply embedded** - provides drug nodes (identity), drug-protein edges, drug-drug edges, drug-disease edges (via Drug Central vocabulary mapping), and drug-effect edges (via SIDER ATC code mapping)
+4. **UMLS is critical for disease ID mapping** - maps CUI identifiers to MONDO IDs; used by DisGeNET and Drug Central
+5. **Partial rebuild IS feasible** but requires replacing DrugBank drug vocabulary with an alternative and finding a UMLS-free disease mapping path
+6. Full database-to-edge-type mapping documented below
+
+### Observations
+- PPI data source is NOT in the download script - it must be manually placed; uses Menche et al. compiled network (TRANSFAC, MINT, IntAct, CORUM, BioGRID)
+- The build includes a complex disease grouping step using Bio_ClinicalBERT embeddings with manual interactive review
+- OMIM is technically optional - it was added later via a separate `append_omim.ipynb` notebook (PR by @abearab)
+
+### Next Steps
+- Decide on rebuild strategy: (a) partial rebuild with free databases only, or (b) obtain DrugBank academic license
+- If partial rebuild: need to replace DrugBank vocabulary lookups and find alternative UMLS-MONDO mapping
+
+## 2026-03-01 Session 7 - Deep Dive into PrimeKG Pipeline Code
+
+### Changes Made
+- Cloned PrimeKG repository to `tools/PrimeKG/`
+- Conducted thorough analysis of all 14 processing scripts, the shell download script, and the 99-cell build_graph.ipynb notebook
+
+### Key Findings: Processing Scripts
+- All 14 scripts use **hardcoded relative paths** (`../data/<source>/`), no command-line arguments
+- All are extremely simple (15-57 lines of pandas), focused, and self-contained
+- Two scripts (`mondo.py`, `hpo.py`) depend on sibling OBO parser files (`mondo_obo_parser.py`, `hpo_obo_parser.py`) which are modified copies of goatools OBOReader
+- Two scripts (`go.py`, `ncbigene.py`) require the `goatools` library
+- One script (`drugbank_drug_drug.py`) requires BeautifulSoup for XML parsing
+- Scripts are trivially adaptable to configurable paths -- just parameterize the `../data/` prefix
+
+### Key Findings: primary_data_resources.sh
+- **One big monolith** -- 201 lines, no functions, no flags, no error handling
+- Hardcoded Harvard cluster paths (`/n/data1/hms/dbmi/zitnik/lab/...`)
+- Harvard HPC `module load` commands baked in
+- 3 authenticated sources (DrugBank, UMLS, Drug Central PostgreSQL) require special handling
+- Multiple TODO items left unfinished in the script
+- Not reusable -- must write our own download layer
+
+### Key Findings: build_graph.ipynb
+- 99 cells, purely pandas data wrangling (merge/rename/concat/filter)
+- Creates 28 edge DataFrames covering all relationship types
+- Phases: read data -> convert to edges -> concat + reverse edges -> giant component -> disease collapsing (BERT) -> final assembly
+- Disease collapsing uses Bio_ClinicalBERT embeddings + cosine similarity
+- Multiple intermediate saves (kg_raw.csv, kg_giant.csv, kg_grouped.csv, kg.csv)
+- Final outputs: kg.csv, nodes.csv, edges.csv
+- Not importable as a module -- must be refactored
+
+### Strategy Decision: HYBRID APPROACH
+| Layer | Strategy | Reason |
+|-------|----------|--------|
+| Download | Write our own | Shell script is non-modular, Harvard-specific |
+| Processing | Wrap their scripts (parameterize paths) | Simple, correct, battle-tested |
+| OBO Parsers | Copy into our project | Small, self-contained |
+| Graph Assembly | Write our own (informed by notebook) | Need snapshot-awareness, importability |
+| Disease Collapsing | Adapt from notebook cells 75-91 | Complex but well-defined logic |
+
+### Next Steps
+- Create parameterized wrapper module for the 14 processing scripts
+- Write our own download module with date/version awareness
+- Convert build_graph.ipynb assembly logic into importable Python functions
+- Implement snapshot-aware graph building for t0/t1/t2 temporal comparison
+
+---
+
+## 2026-03-01 Session 4 - Real t1 Build (Phase 2 continued)
+
+### Changes Made
+- `configs/t1_sources.yaml`: Created database configuration with 9 enabled free databases, 7 disabled (need registration/unreachable)
+- `src/data/kg_builder.py` (~1200 lines): Created comprehensive download, processing, and assembly module
+  - Download functions for all 11 databases with User-Agent header, timeout, gzip support
+  - Processing functions adapted from PrimeKG's processing scripts with parameterized paths
+  - Custom OBO parser for MONDO and HPO (avoids goatools dependency for ontology parsing)
+  - Edge assembly functions for all 16+ edge types adapted from build_graph.ipynb
+  - Edge carrying logic for disabled databases (drug, PPI, DisGeNET, Reactome edges from t0)
+- `scripts/build_real_t1.py`: CLI script with --skip-download, --download-only, --config, --output options
+- `src/data/temporal_diff.py`: Enhanced `normalize_entity_ids()` to handle MONDO disease ID grouping mismatch (t0 uses grouped super-node IDs, t1 uses individual IDs)
+
+### Issues Encountered and Fixed
+1. **GO OBO download 403 Forbidden**: `urllib.request.urlretrieve` failed - purl.obolibrary.org requires User-Agent header. Fixed with custom `urllib.request.Request`.
+2. **Reactome timeout**: reactome.org unreachable. Disabled in config, carry edges from t0.
+3. **DisGeNET API changed**: disgenet.com new commercial model, old API endpoints return HTML. Disabled, carry from t0.
+4. **gene2go merge type mismatch**: `ncbi_gene_id` was int64 vs string. Fixed with `.astype(str)`.
+5. **exposure_go phenotypeid parsing**: Some CTD phenotypeid values don't have `:` delimiter. Fixed by filtering to GO-formatted IDs only.
+6. **MONDO non-disease terms**: OBO parser was including BFO, UBERON, HP, GO prefixed terms as diseases (~26K non-MONDO terms). Fixed parser to skip terms that don't match the ontology prefix.
+7. **goatools not installed**: Installed via pip for GO and gene2go processing.
+
+### Experiment: Real t1 KG Build
+- **Config:** 9 free databases enabled, 7 disabled (carried from t0)
+- **Command:** `python scripts/build_real_t1.py --skip-download`
+- **Results:**
+  - Total edges: 13,001,666
+  - Unique nodes: 134,508
+  - Relation types: 25
+  - Node types: 10
+  - Top edge types: anatomy_protein_present (7.5M), drug_drug (2.7M), anatomy_protein_absent (731K)
+  - Disease nodes: 14,188 (MONDO-only after fix)
+  - disease_disease edges: 16,346
+- **Observations:** Bgee (anatomy-protein) dominates edge count. Disease IDs use individual MONDO format vs t0's grouped format. Carried edges from t0 ensure drug/PPI/Reactome/DisGeNET coverage.
+
+### Experiment: Benchmark Pipeline with Real t1
+- **Command:** `python scripts/build_benchmark.py --data-dir data/benchmark`
+- **Results:**
+  - Temporal Diff: +5,760,234 added, -888,848 removed, 7,208,624 persistent (89% persistence)
+  - Emerged entities: 36,653
+  - 6 tasks created (entity_type strategy)
+  - No data leakage detected
+  - task_0_base: 8.1M triples (full t0)
+  - task_2_gene_protein: 2.85M triples (largest new task)
+  - task_5_anatomy_pathway: 2.75M triples
+- **Observations:** Real temporal evolution captured. Gene/protein and anatomy tasks dominate new edges. Disease-related task is small (17K) due to ID format mismatch between t0 grouped and t1 individual MONDO IDs — normalize_entity_ids partially addresses this.
+
+### Database Downloads Summary
+| Database | Status | Size |
+|----------|--------|------|
+| gene_names | OK | Small |
+| bgee | OK | 2.9 GB |
+| ctd | OK | ~400 MB |
+| gene_ontology | OK | ~35 MB |
+| gene2go | OK | ~10 GB (uncompressed) |
+| hpo | OK | ~8 MB |
+| hpoa | OK | ~15 MB |
+| mondo | OK | ~20 MB |
+| uberon | OK | ~18 MB |
+| reactome | FAILED (timeout) | - |
+| disgenet | FAILED (API changed) | - |
+
+### Next Steps
+- Begin Phase 3: Baseline implementation (naive sequential, joint training, EWC, experience replay)
+- When DrugBank/UMLS licenses arrive, enable those databases and rebuild t1
+- Re-enable Reactome when server is accessible
+- Investigate disease_phenotype_positive low count (661 edges) — may need better MONDO-OMIM cross-reference matching in HPOA processing
