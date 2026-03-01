@@ -175,3 +175,106 @@ Used for: cross-session context recovery, progress reporting to Prof. Zhang.
   - Compute temporal diffs between snapshots
   - Create CL task sequences
   - Extract multimodal features
+
+---
+
+## 2026-03-01 Session 4 - Phase 2: Benchmark Construction
+
+### Changes Made
+
+#### Step 2.1: PrimeKG t0 Already Available
+- Downloaded in Phase 1: `data/benchmark/snapshots/kg_t0.csv` (847MB, 8.1M triples)
+
+#### Step 2.2: Simulated t1 for Development
+- Real t1 requires cloning PrimeKG repo + DrugBank/DisGeNET licenses (manual step)
+- Created `create_simulated_t1()` in `src/data/temporal_diff.py` as development fallback
+- Simulates temporal evolution: removes 1% of edges, adds 5% new edges focused on dynamic relations (indication, contraindication, drug_protein, disease_protein)
+- Simulated t1: 8,414,448 triples saved to `data/benchmark/snapshots/kg_t1_simulated.csv`
+
+#### Step 2.4: Implemented src/data/temporal_diff.py
+- `compute_kg_diff()`: Creates triple IDs (`x_id|relation|y_id`), computes set differences
+- `normalize_entity_ids()`: Ensures consistent string ID types across snapshots
+- `save_diff_report()`: Saves diff stats as JSON
+- `create_simulated_t1()`: Development fallback for simulated temporal evolution
+- **Bug found & fixed:** `_make_triple_ids()` uses canonical triple form for reliable comparison
+
+#### Step 2.5: Implemented src/data/task_sequence.py
+- `create_task_sequence()`: Accepts DataFrames or paths, supports 3 strategies
+- `_entity_type_strategy()`: Groups triples by dominant entity type (drug > disease > gene > ...)
+- `_relation_type_strategy()`: One task per relation type
+- `_temporal_strategy()`: Splits into N equal chunks
+- `validate_task_sequence()`: Merges small tasks (<100 triples), checks for overlap
+- **Bug found & fixed:** Initial version tried calling `compute_kg_diff` with `"__preloaded__"` as path when DataFrames were passed. Fixed to branch on isinstance check.
+
+#### Step 2.6: Implemented src/data/features.py
+- `extract_multimodal_features()`: Full pipeline for drug/disease features
+- `_process_drug_features()`: Concatenates text columns (description, indication, pharmacodynamics, mechanism_of_action), extracts numeric features
+- `_process_disease_features()`: Uses disease features file or falls back to disease names from KG
+- `build_node_index_map()`: Creates unified integer index for all 129,312 nodes (solves missing x_index/y_index from TDC)
+- `compute_morgan_fingerprints()`: RDKit Morgan fingerprints from SMILES
+- `compute_text_embeddings()`: BiomedBERT text embeddings (for IBEX GPU)
+- `get_node_modality_masks()`: Boolean masks for which nodes have text/molecular features
+
+#### Step 2.7: Implemented src/data/splits.py
+- `create_splits_per_task()`: Creates train/val/test splits with leakage prevention
+- `verify_no_leakage()`: Verifies no test triples from task i appear in training of task i+1
+- `save_splits()`: Saves in KGE-compatible format (tab-separated head/relation/tail)
+
+#### Step 2.8: Implemented scripts/build_benchmark.py
+- Full end-to-end pipeline: snapshots → diffs → tasks → features → splits → save
+- `--simulate-t1` flag for development mode
+- Generates `statistics.json` and `README.md` in benchmark directory
+
+### Benchmark Pipeline Results (simulated t1)
+
+| Metric | Value |
+|--------|-------|
+| t0 triples | 8,100,498 |
+| t1 triples (simulated) | 8,414,448 |
+| Added triples | 397,876 |
+| Removed triples | 80,900 |
+| Persistent triples | 8,016,572 |
+
+#### Task Sequence (entity_type strategy):
+| Task | Triples | Train | Val | Test |
+|------|---------|-------|-----|------|
+| task_0_base | 8,100,498 | 5,670,350 | 810,049 | 1,620,099 |
+| task_1_drug_related | 125,343 | 87,741 | 12,534 | 25,068 |
+| task_2_disease_related | 115,382 | 80,768 | 11,538 | 23,076 |
+| task_3_gene_protein | 99,761 | 69,833 | 9,976 | 19,952 |
+| task_4_phenotype_related | 57,390 | 40,173 | 5,739 | 11,478 |
+
+#### Feature Coverage:
+| Feature | Count |
+|---------|-------|
+| Total nodes | 129,312 |
+| Drugs with text | 4,752/7,957 (59.7%) |
+| Diseases with text | 16,673/17,080 (97.6%) |
+| Nodes with molecular features | 10,304 |
+
+- No data leakage detected across all 5 tasks
+- Pipeline runs in ~108 seconds on local machine
+
+### Files Created/Modified
+- `src/data/temporal_diff.py`: Fully implemented (was stub)
+- `src/data/task_sequence.py`: Fully implemented (was stub)
+- `src/data/features.py`: Fully implemented (was stub)
+- `src/data/splits.py`: Fully implemented (was stub)
+- `scripts/build_benchmark.py`: Fully implemented (was skeleton)
+- `notebooks/02_benchmark_stats.ipynb`: Full benchmark visualization notebook
+- `results/benchmark_diff_stats.png`: Temporal diff visualization
+- `results/benchmark_task_splits.png`: Task split sizes visualization
+- `results/benchmark_feature_coverage.png`: Feature coverage visualization
+
+### Phase Status Update
+| Phase | Status |
+|-------|--------|
+| 0 - Scaffolding | DONE |
+| 1 - Setup & Exploration | DONE |
+| 2 - Benchmark Construction | DONE (using simulated t1; real t1 needs manual DrugBank/DisGeNET) |
+| 3 - Baseline Implementation | PENDING (next) |
+
+### Next Steps
+- Phase 3: Implement baseline methods (Naive Sequential, Joint Training, EWC, Experience Replay, LKGE, RAG)
+- For real t1: Clone PrimeKG repo, get DrugBank academic license, rebuild from July 2023 sources
+- Text embeddings (BiomedBERT) should be computed on IBEX with GPU
