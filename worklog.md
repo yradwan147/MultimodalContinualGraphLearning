@@ -65,3 +65,113 @@ Used for: cross-session context recovery, progress reporting to Prof. Zhang.
 
 ### Next Steps
 - Phase 1: Set up conda environment, install dependencies, download and explore PrimeKG t0
+
+---
+
+## 2026-03-01 Session 3 - Phase 1: Environment Setup & PrimeKG Exploration
+
+### Changes Made
+
+#### Step 1.1: Conda Environment Created
+- Created `mcgl` conda environment with Python 3.10 on Apple M3 Pro (MPS backend)
+- Installed all dependencies via pip (PyTorch CPU/MPS for local, CUDA for IBEX):
+  - PyTorch 2.10.0, PyG 2.7.0, PyKEEN 1.11.1
+  - Transformers 4.50.3 (downgraded by TDC from 5.2.0), NumPy 1.26.4 (downgraded by TDC from 2.2.6)
+  - RDKit 2025.09.5, pandas 2.3.3, scikit-learn 1.7.2
+  - LangChain 1.2.10, ChromaDB 1.5.2, SentenceTransformers 5.2.3
+  - W&B 0.25.0, Hydra 1.3.2
+  - PyTDC 1.1.15 (for PrimeKG download)
+- All imports verified successfully
+- MPS (Apple Silicon GPU) available for local development
+
+#### Step 1.2: Literature Review
+- SKIPPED per user preferences (PDF provides sufficient coverage)
+
+#### Step 1.3: Implemented Utility Modules
+- `src/utils/config.py`: load_config(), merge_configs(), save_config() with YAML support and dot-notation overrides
+- `src/utils/io.py`: save_json(), load_json(), save_tensor(), load_tensor(), ensure_dir()
+- Both modules tested and verified with round-trip tests
+
+#### Step 1.4: Implemented src/data/download.py
+- `download_primekg_t0()`: Downloads via TDC (preferred) or Harvard Dataverse, with fallback
+- `download_primekg_tdc()`: Uses TDC PrimeKG resource, also saves drug features
+- `download_primekg_dataverse()`: Direct download from Harvard Dataverse
+- `load_primekg()`: CSV loading with optional chunked reading
+- `verify_primekg()`: Data integrity checks (row count, column names, node/relation types)
+
+#### Step 1.5: Downloaded and Explored PrimeKG t0
+- Downloaded via TDC: 888MB download, saved as `data/benchmark/snapshots/kg_t0.csv` (847MB)
+- Also obtained `drug_features_t0.csv` (9.3MB, 7957 drugs, 18 feature columns)
+
+### PrimeKG t0 Exploration Results
+| Metric | Value |
+|--------|-------|
+| Total edges | 8,100,498 |
+| Total columns | 10 (TDC version lacks x_index, y_index) |
+| Node types | 10 |
+| Relation types | 30 |
+| Unique nodes | 129,312 |
+| Drug-Disease edges | 85,262 |
+| Drug-Disease relation types | contraindication (61,350), indication (18,776), off-label use (5,136) |
+
+#### Node counts by type:
+| Node Type | Count |
+|-----------|-------|
+| biological_process | 28,642 |
+| gene/protein | 27,610 |
+| disease | 17,080 |
+| effect/phenotype | 15,311 |
+| anatomy | 14,033 |
+| molecular_function | 11,169 |
+| drug | 7,957 |
+| cellular_component | 4,176 |
+| pathway | 2,516 |
+| exposure | 818 |
+
+#### Top 5 edge types:
+| Relation | Count |
+|----------|-------|
+| anatomy_protein_present | 3,036,406 |
+| drug_drug | 2,672,628 |
+| protein_protein | 642,150 |
+| disease_phenotype_positive | 300,634 |
+| bioprocess_protein | 289,610 |
+
+#### Drug Features Coverage (18 columns):
+- description: 57.7% non-null (4,591/7,957)
+- indication: 42.6% non-null
+- mechanism_of_action: 40.7% non-null
+- pharmacodynamics: 33.4% non-null
+- molecular_weight: 35.2% non-null (numeric, for molecular fingerprints)
+- state: 81.9% non-null
+
+#### Key Observations:
+1. **TDC version lacks `x_index`/`y_index` columns** - need to create integer node mapping in Phase 2
+2. **Highly skewed edge distribution** - anatomy_protein_present and drug_drug dominate (>70% of edges)
+3. **Drug-disease edges (85K)** are a small fraction (~1%) of total edges - good for link prediction
+4. **Drug features have variable coverage** - description (58%), indication (43%), molecular properties (~35%)
+5. **129,312 unique nodes** matches expected ~129K from PrimeKG paper
+
+### Files Modified/Created
+- `src/utils/config.py`: Fully implemented (was stub)
+- `src/utils/io.py`: Fully implemented (was stub)
+- `src/data/download.py`: Fully implemented (was stub)
+- `notebooks/01_explore_primekg.ipynb`: Full EDA notebook with 7 sections
+- `results/primekg_t0_relation_dist.png`: Relation type distribution plot
+- `results/primekg_t0_node_dist.png`: Node type distribution plot
+- `results/primekg_t0_edge_heatmap.png`: Node type cross-tabulation heatmap
+
+### Phase Status Update
+| Phase | Status |
+|-------|--------|
+| 0 - Scaffolding | DONE |
+| 1 - Setup & Exploration | DONE (literature review skipped per user pref) |
+| 2 - Benchmark Construction | PENDING (next) |
+
+### Next Steps
+- Phase 2: Build temporal benchmark from PrimeKG snapshots
+  - Create integer node index mapping for TDC data
+  - Download/rebuild PrimeKG t1 (July 2023)
+  - Compute temporal diffs between snapshots
+  - Create CL task sequences
+  - Extract multimodal features

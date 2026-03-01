@@ -10,9 +10,12 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,13 @@ def save_json(data: Any, path: str, indent: int = 2) -> None:
         path: Output file path.
         indent: JSON indentation level.
     """
-    raise NotImplementedError("Phase 1: Implement JSON saving")
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(p, "w") as f:
+        json.dump(data, f, indent=indent)
+
+    logger.info(f"Saved JSON to {path}")
 
 
 def load_json(path: str) -> Any:
@@ -37,20 +46,25 @@ def load_json(path: str) -> Any:
     Returns:
         Deserialized data.
     """
-    raise NotImplementedError("Phase 1: Implement JSON loading")
+    with open(path) as f:
+        data = json.load(f)
+    return data
 
 
-def save_tensor(tensor: "torch.Tensor", path: str) -> None:
+def save_tensor(tensor: torch.Tensor, path: str) -> None:
     """Save PyTorch tensor to disk.
 
     Args:
         tensor: Tensor to save.
         path: Output file path.
     """
-    raise NotImplementedError("Phase 2: Implement tensor saving")
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(tensor, p)
+    logger.info(f"Saved tensor {tensor.shape} to {path}")
 
 
-def load_tensor(path: str, device: str = "cpu") -> "torch.Tensor":
+def load_tensor(path: str, device: str = "cpu") -> torch.Tensor:
     """Load PyTorch tensor from disk.
 
     Args:
@@ -60,7 +74,9 @@ def load_tensor(path: str, device: str = "cpu") -> "torch.Tensor":
     Returns:
         Loaded tensor.
     """
-    raise NotImplementedError("Phase 2: Implement tensor loading")
+    tensor = torch.load(path, map_location=device, weights_only=True)
+    logger.info(f"Loaded tensor {tensor.shape} from {path}")
+    return tensor
 
 
 def ensure_dir(path: str) -> Path:

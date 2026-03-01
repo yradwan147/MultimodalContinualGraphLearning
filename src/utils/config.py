@@ -10,9 +10,12 @@ Usage:
 
 from __future__ import annotations
 
+import copy
 import logging
 from pathlib import Path
 from typing import Any, Optional
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,22 @@ def load_config(
     Returns:
         Configuration dictionary.
     """
-    raise NotImplementedError("Phase 1: Implement config loading")
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    with open(path) as f:
+        config = yaml.safe_load(f)
+
+    if config is None:
+        config = {}
+
+    if overrides:
+        for key, value in overrides.items():
+            _set_nested(config, key, value)
+
+    logger.info(f"Loaded config from {config_path}")
+    return config
 
 
 def merge_configs(base: dict, override: dict) -> dict:
@@ -44,7 +62,13 @@ def merge_configs(base: dict, override: dict) -> dict:
     Returns:
         Merged configuration dict.
     """
-    raise NotImplementedError("Phase 1: Implement config merging")
+    merged = copy.deepcopy(base)
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = merge_configs(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
 
 
 def save_config(config: dict, output_path: str) -> None:
@@ -54,4 +78,24 @@ def save_config(config: dict, output_path: str) -> None:
         config: Configuration dictionary.
         output_path: Path to save YAML file.
     """
-    raise NotImplementedError("Phase 1: Implement config saving")
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    logger.info(f"Saved config to {output_path}")
+
+
+def _set_nested(d: dict, key: str, value: Any) -> None:
+    """Set a value in a nested dict using dot-separated key.
+
+    Args:
+        d: Dictionary to modify in place.
+        key: Dot-separated key path (e.g., 'training.lr').
+        value: Value to set.
+    """
+    parts = key.split(".")
+    for part in parts[:-1]:
+        d = d.setdefault(part, {})
+    d[parts[-1]] = value
