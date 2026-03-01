@@ -1,21 +1,23 @@
-#!/bin/bash
-#SBATCH --job-name=mcgl-ablation
-#SBATCH --output=slurm_logs/%x_%j.out
-#SBATCH --error=slurm_logs/%x_%j.err
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:v100:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
-#SBATCH --time=48:00:00
+#!/bin/bash --login
+#SBATCH --time=24:00:00
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --partition=batch
+#SBATCH --cpus-per-gpu=2
+#SBATCH --mem=10G
+#SBATCH -J mcgl_ablation
+#SBATCH -o mcgl_ablation_%J.out
 
-# Run ablation studies on IBEX
-# Usage: sbatch slurm/run_ablations.sh [ablation_name]
-# Example: sbatch slurm/run_ablations.sh struct_only
+# Run CMKL ablation studies on IBEX
+# Usage:
+#   sbatch slurm/run_ablations.sh all              # all ablations
+#   sbatch slurm/run_ablations.sh struct_only       # single ablation
+#   sbatch slurm/run_ablations.sh buffer_size_sweep # sweep
 
-module load cuda/11.8
-module load conda
+source ~/miniconda3/bin/activate
 conda activate mcgl
-mkdir -p slurm_logs results
+
+mkdir -p results
 
 ABLATION=${1:-all}
 
@@ -26,7 +28,11 @@ echo "Start: $(date)"
 
 python scripts/run_ablations.py \
     --ablation $ABLATION \
+    --embedding-dim 256 \
+    --num-epochs 100 \
+    --batch-size 512 \
+    --device cuda \
     --seeds 42 123 456 789 1024 \
-    --output_dir results/ablation_${ABLATION}_$(date +%Y%m%d_%H%M%S)
+    --output-dir results
 
 echo "End: $(date)"

@@ -1,0 +1,16 @@
+\begin{table}[ht]
+\centering
+\caption{Continual learning results on the MCGL benchmark.}
+\label{tab:main_results}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Method} & \textbf{AP} & \textbf{AF} & \textbf{BWT} & \textbf{FWT} & \textbf{REM} \\
+\midrule
+Naive Sequential & 0.0022 & 0.0035 & -0.0035 & 0.0000 & 0.9965 \\
+Joint Training & 0.0051 & 0.0000 & 0.0000 & 0.0049 & 1.0000 \\
+EWC & 0.0027 & 0.0027 & -0.0027 & 0.0000 & 0.9973 \\
+Experience Replay & 0.0023 & 0.0035 & -0.0035 & 0.0000 & 0.9965 \\
+CMKL (Ours) & 0.1240 & 0.0005 & -0.0005 & 0.0000 & 0.9995 \\
+\bottomrule
+\end{tabular}
+\end{table}

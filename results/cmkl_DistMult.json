@@ -1,0 +1,50 @@
+{
+  "method": "cmkl",
+  "decoder": "DistMult",
+  "fusion": "cross_attention",
+  "config": {
+    "num_entities": 24427,
+    "num_relations": 4,
+    "embedding_dim": 64,
+    "num_gnn_layers": 1,
+    "num_attention_heads": 2,
+    "fusion_type": "cross_attention",
+    "decoder_type": "DistMult",
+    "lambda_struct": 10.0,
+    "lambda_text": 5.0,
+    "lambda_mol": 1.0,
+    "replay_buffer_size": 100,
+    "replay_weight": 0.5,
+    "lr": 0.001,
+    "num_epochs": 5,
+    "batch_size": 512
+  },
+  "task_names": [
+    "task_1_disease_related",
+    "task_3_phenotype_related"
+  ],
+  "seeds": [
+    42
+  ],
+  "results": [
+    {
+      "Average Performance (AP)": 0.12396058669245669,
+      "Average Forgetting (AF)": 0.00048827308426966504,
+      "Backward Transfer (BWT)": -0.00048827308426966504,
+      "Forward Transfer (FWT)": 0.0,
+      "Remembering (REM)": 0.9995117269157303,
+      "seed": 42,
+      "results_matrix": [
+        [
+          0.05861713242700519,
+          0.0
+        ],
+        [
+          0.058128859342735525,
+          0.18979231404217786
+        ]
+      ],
+      "training_time_s": 15.900971174240112
+    }
+  ]
+}

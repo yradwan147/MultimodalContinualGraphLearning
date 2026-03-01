@@ -1,0 +1,49 @@
+{
+  "ablation": "struct_only",
+  "config": {
+    "num_entities": 24427,
+    "num_relations": 4,
+    "embedding_dim": 64,
+    "num_gnn_layers": 1,
+    "num_attention_heads": 2,
+    "fusion_type": "cross_attention",
+    "decoder_type": "DistMult",
+    "lambda_struct": 10.0,
+    "lambda_text": 5.0,
+    "lambda_mol": 1.0,
+    "replay_buffer_size": 1000,
+    "replay_weight": 0.5,
+    "lr": 0.001,
+    "num_epochs": 3,
+    "batch_size": 512
+  },
+  "task_names": [
+    "task_1_disease_related",
+    "task_3_phenotype_related"
+  ],
+  "seeds": [
+    42
+  ],
+  "total_time_s": 6.819424867630005,
+  "results": [
+    {
+      "Average Performance (AP)": 0.08699362466154212,
+      "Average Forgetting (AF)": -0.020137961891536767,
+      "Backward Transfer (BWT)": 0.020137961891536767,
+      "Forward Transfer (FWT)": 0.0,
+      "Remembering (REM)": 1.0,
+      "seed": 42,
+      "results_matrix": [
+        [
+          0.024332259092245002,
+          0.0
+        ],
+        [
+          0.04447022098378177,
+          0.12951702833930248
+        ]
+      ],
+      "training_time_s": 6.816463947296143
+    }
+  ]
+}

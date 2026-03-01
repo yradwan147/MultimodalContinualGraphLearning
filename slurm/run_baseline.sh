@@ -1,35 +1,40 @@
-#!/bin/bash
-#SBATCH --job-name=mcgl-baseline
-#SBATCH --output=slurm_logs/%x_%j.out
-#SBATCH --error=slurm_logs/%x_%j.err
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:v100:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=12:00:00
+#!/bin/bash --login
+#SBATCH --time=24:00:00
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --partition=batch
+#SBATCH --cpus-per-gpu=2
+#SBATCH --mem=10G
+#SBATCH -J mcgl_baseline
+#SBATCH -o mcgl_baseline_%J.out
 
 # Run baseline experiments on IBEX
-# Usage: sbatch slurm/run_baseline.sh <baseline_name> <config_file>
-# Example: sbatch slurm/run_baseline.sh ewc configs/ewc.yaml
+# Usage:
+#   sbatch slurm/run_baseline.sh                          # all baselines
+#   sbatch slurm/run_baseline.sh naive_sequential          # single baseline
+#   sbatch slurm/run_baseline.sh ewc TransE                # specific model
 
-module load cuda/11.8
-module load conda
+source ~/miniconda3/bin/activate
 conda activate mcgl
-mkdir -p slurm_logs results
 
-BASELINE=${1:-naive_sequential}
-CONFIG=${2:-configs/base.yaml}
+mkdir -p results
+
+BASELINE=${1:-all}
+MODEL=${2:-TransE}
 
 echo "Job ID: $SLURM_JOB_ID"
-echo "Running baseline: $BASELINE"
-echo "Config: $CONFIG"
+echo "Running baseline: $BASELINE, model: $MODEL"
 echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 echo "Start: $(date)"
 
 python scripts/run_baselines.py \
     --baseline $BASELINE \
-    --config $CONFIG \
+    --model $MODEL \
+    --embedding-dim 256 \
+    --num-epochs 100 \
+    --batch-size 512 \
+    --device cuda \
     --seeds 42 123 456 789 1024 \
-    --output_dir results/${BASELINE}_$(date +%Y%m%d_%H%M%S)
+    --output-dir results
 
 echo "End: $(date)"

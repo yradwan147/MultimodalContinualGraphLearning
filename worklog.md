@@ -547,3 +547,30 @@ All components import and run correctly:
   - Statistical significance tests
   - Update SLURM scripts for CMKL training
 - Prepare SLURM scripts for IBEX GPU runs
+
+### Phase 5 Preparation (continued in same session)
+
+#### Scripts Implemented
+- `scripts/run_cmkl.py`: Full CLI for CMKL training with --decoder, --fusion, --embedding-dim, --lambda-*, --replay-buffer-size, --seeds, --quick mode. Saves results as JSON.
+- `scripts/run_ablations.py`: Full CLI for 7 ablation studies. Dispatch functions for each ablation modify the base config and run CMKL. Sweep ablations (buffer_size, lambda) iterate over parameter grids.
+- `scripts/generate_tables.py`: Loads all JSON results, generates LaTeX + Markdown tables (main results + ablation), generates figures (heatmaps, method comparison, buffer sensitivity).
+
+#### SLURM Scripts Updated (matching user's IBEX config)
+All 4 SLURM scripts updated to user's preferred IBEX configuration:
+- `slurm/base_job.sh`, `slurm/run_baseline.sh`, `slurm/run_cmkl.sh`, `slurm/run_ablations.sh`
+- Config: `--partition=batch --gres=gpu:1 --cpus-per-gpu=2 --mem=10G --time=24:00:00`
+- Shebang: `#!/bin/bash --login`
+- Conda: `source ~/miniconda3/bin/activate && conda activate mcgl`
+- No specific GPU type requested (generic GPU, no V100/A100 hogging)
+
+#### Smoke Tests
+- `run_cmkl.py --quick`: AP=0.1240, AF=0.0005, REM=0.9995 (16s on CPU)
+- `run_ablations.py --ablation struct_only --quick`: AP=0.0870 (struct only < full CMKL, as expected)
+- `generate_tables.py`: Successfully generates LaTeX and Markdown tables from existing result JSONs
+
+### Next Steps (for IBEX)
+To run the full experiment matrix, submit these jobs on IBEX:
+1. `sbatch slurm/run_baseline.sh all TransE` — All 4 baselines with 5 seeds
+2. `sbatch slurm/run_cmkl.sh DistMult` — CMKL with 5 seeds
+3. `sbatch slurm/run_ablations.sh all` — All 7 ablation studies
+4. After results: `python scripts/generate_tables.py --format both`

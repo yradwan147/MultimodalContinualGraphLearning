@@ -115,8 +115,10 @@ All project details are in `MCGL Full Project Guide.pdf` (50 pages) in the proje
 
 - **Local machine:** Data exploration, small tests, code development, plotting
 - **IBEX (KAUST):** Model training, large experiments, hyperparameter sweeps, ablation studies
-  - Partition: `gpu` (general)
-  - GPU: V100
+  - Partition: `batch`
+  - GPU: generic (`--gres=gpu:1`, no specific type — don't hog V100/A100 unless needed)
+  - Resources: `--cpus-per-gpu=2`, `--mem=10G`, `--time=24:00:00`
+  - Conda: `source ~/miniconda3/bin/activate && conda activate mcgl`
   - SLURM scripts in `slurm/` directory
   - Workflow: Claude prepares scripts -> User runs on IBEX -> User pastes outputs -> Claude analyzes
 

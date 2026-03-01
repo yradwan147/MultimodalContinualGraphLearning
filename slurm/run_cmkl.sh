@@ -1,33 +1,37 @@
-#!/bin/bash
-#SBATCH --job-name=mcgl-cmkl
-#SBATCH --output=slurm_logs/%x_%j.out
-#SBATCH --error=slurm_logs/%x_%j.err
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:v100:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#!/bin/bash --login
 #SBATCH --time=24:00:00
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --partition=batch
+#SBATCH --cpus-per-gpu=2
+#SBATCH --mem=10G
+#SBATCH -J mcgl_cmkl
+#SBATCH -o mcgl_cmkl_%J.out
 
 # Run CMKL experiments on IBEX
-# Usage: sbatch slurm/run_cmkl.sh [config_file]
-# Example: sbatch slurm/run_cmkl.sh configs/cmkl.yaml
+# Usage:
+#   sbatch slurm/run_cmkl.sh                # default DistMult
+#   sbatch slurm/run_cmkl.sh TransE         # specific decoder
 
-module load cuda/11.8
-module load conda
+source ~/miniconda3/bin/activate
 conda activate mcgl
-mkdir -p slurm_logs results checkpoints
 
-CONFIG=${1:-configs/cmkl.yaml}
+mkdir -p results checkpoints
+
+DECODER=${1:-DistMult}
 
 echo "Job ID: $SLURM_JOB_ID"
-echo "Config: $CONFIG"
+echo "Decoder: $DECODER"
 echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 echo "Start: $(date)"
 
 python scripts/run_cmkl.py \
-    --config $CONFIG \
+    --decoder $DECODER \
+    --embedding-dim 256 \
+    --num-epochs 100 \
+    --batch-size 512 \
+    --device cuda \
     --seeds 42 123 456 789 1024 \
-    --output_dir results/cmkl_$(date +%Y%m%d_%H%M%S) \
-    --checkpoint_dir checkpoints/
+    --output-dir results
 
 echo "End: $(date)"

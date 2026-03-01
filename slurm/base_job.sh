@@ -1,27 +1,21 @@
-#!/bin/bash
-#SBATCH --job-name=mcgl
-#SBATCH --output=slurm_logs/%x_%j.out
-#SBATCH --error=slurm_logs/%x_%j.err
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:v100:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#!/bin/bash --login
 #SBATCH --time=24:00:00
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --partition=batch
+#SBATCH --cpus-per-gpu=2
+#SBATCH --mem=10G
+#SBATCH -J mcgl
+#SBATCH -o mcgl_%J.out
 
 # MCGL Base SLURM Job Template for IBEX
 # Usage: sbatch slurm/base_job.sh
 
-# Load modules (adjust to IBEX's available modules)
-module load cuda/11.8
-module load conda
-
-# Activate environment
+source ~/miniconda3/bin/activate
 conda activate mcgl
 
-# Create log directory
-mkdir -p slurm_logs
+mkdir -p results checkpoints
 
-# Print job info
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURM_NODELIST"
 echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
@@ -29,8 +23,8 @@ echo "Start time: $(date)"
 echo "Working directory: $(pwd)"
 
 # ---- REPLACE THIS WITH YOUR COMMAND ----
-# python scripts/run_baselines.py --config configs/base.yaml
-# python scripts/run_cmkl.py --config configs/cmkl.yaml
+# python scripts/run_baselines.py --baseline naive_sequential
+# python scripts/run_cmkl.py --seeds 42 123 456 789 1024
 # ----------------------------------------
 
 echo "End time: $(date)"
