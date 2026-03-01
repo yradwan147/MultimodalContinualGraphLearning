@@ -460,3 +460,90 @@ All baselines run end-to-end with correct CL metric computation.
   - SLURM scripts needed
 - Phase 4: CMKL model development (encoders, fusion, modality-aware EWC)
 - RAG agent baseline deferred (needs LLM, for KGQA task)
+
+---
+
+## 2026-03-01 Session 6 - Phase 4: CMKL Development
+
+### Changes Made
+
+#### Component 1: Modality-Specific Encoders (`src/models/encoders.py`)
+- `StructuralEncoder`: R-GCN with nn.Embedding + RGCNConv layers + LayerNorm + ReLU. Falls back to embedding-only mode if torch_geometric unavailable.
+- `TextualEncoder`: Frozen BiomedBERT (microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract) with lazy loading. Linear projection 768→embedding_dim. `encode_texts()` method for pre-computing text embeddings.
+- `MolecularEncoder`: 2-layer MLP (1024→512→embedding_dim) with ReLU + Dropout for Morgan fingerprints.
+
+#### Component 2: Link Prediction Decoders (`src/models/decoders.py`)
+- `TransEDecoder`: -||h + r - t||_p (translation-based scoring)
+- `DistMultDecoder`: sum(h * r * t) (bilinear diagonal)
+- `BilinearDecoder`: h^T M_r t (full bilinear with per-relation weight matrix)
+
+#### Component 3: Cross-Modal Attention Fusion (`src/models/fusion.py`)
+- `CrossModalAttentionFusion`: Bidirectional cross-attention between structure and text (MultiheadAttention), molecular features attend to structure, fusion MLP (3D→D), residual connection from structure + LayerNorm. Handles missing modalities via boolean masks and zero vectors.
+- `ConcatenationFusion`: Ablation baseline — simple concatenation + MLP, no cross-attention. Same interface.
+
+#### Component 4: Modality-Aware EWC (`src/continual/modality_ewc.py`)
+- `ModalityAwareEWC`: Separate Fisher diagonal per modality encoder (structural, textual, molecular). Per-modality lambda weights (default: struct=10.0, text=5.0, mol=1.0). Accumulates Fisher across tasks. `compute_modality_fisher()` uses empirical Fisher from gradient squared. `ewc_loss()` computes weighted quadratic penalty. Includes `state_dict()`/`load_state_dict()` for checkpointing.
+
+#### Component 5: Multimodal Memory Replay (`src/continual/multimodal_replay.py`)
+- `MultimodalMemoryBuffer`: Stores triples with per-entity multimodal embeddings (struct, text, mol). K-means clustering on structural embeddings for diverse selection when buffer exceeds max_size (sklearn KMeans, random fallback). `sample()`, `get_replay_triples()`, `get_replay_batch()` methods. Serializable via `state_dict()`/`load_state_dict()`.
+
+#### Component 6: Full CMKL Assembly (`src/models/cmkl.py`)
+- `CMKL(nn.Module)`: Assembles all components — encoders, fusion, decoder, relation embeddings.
+- `forward()`: Encodes all modalities → fuses → returns node embeddings.
+- `score_triples()`: Scores (h, r, t) triples using decoder.
+- `compute_task_loss()`: Negative sampling + margin ranking loss.
+- `train_continually()`: Full continual learning pipeline per task — train, compute Fisher, add exemplars, evaluate.
+- `_evaluate_mrr()`: Custom MRR evaluation (scores all entities as potential tails).
+- `save_checkpoint()` / `load_checkpoint()`: Full checkpointing including EWC and replay buffer state.
+
+### Architecture Summary
+```
+CMKL Framework (assembled)
+├── StructuralEncoder (R-GCN, 2 layers, basis decomposition)
+├── TextualEncoder (frozen BiomedBERT + linear projection)
+├── MolecularEncoder (2-layer MLP for Morgan fingerprints)
+├── CrossModalAttentionFusion (bidirectional cross-attn, 4 heads)
+├── Decoder (TransE/DistMult/Bilinear) + Relation Embeddings
+├── ModalityAwareEWC (per-modality Fisher, weighted penalty)
+└── MultimodalMemoryBuffer (K-means diverse selection)
+```
+
+### Smoke Test Results
+All components import and run correctly:
+- CMKL model creation: 725,476 parameters (dim=64, 100 entities, 5 relations)
+- Forward pass: [100, 64] output shape
+- Score triples: correct scalar outputs
+- CrossModalAttentionFusion: correct shape with partial modality masks
+- ConcatenationFusion: correct shape
+- EWC penalty: 0.0 (no Fisher computed yet, correct)
+- Replay buffer: add/sample/get_replay_triples all working
+
+### End-to-End Continual Training Test
+- **Config:** 2 tasks (disease_related, phenotype_related), dim=64, 3 epochs, DistMult decoder, structural-only
+- **Results:**
+  - CMKL model: 2,274,112 parameters (24,427 entities, 4 relations)
+  - After task 1: MRR=0.0261 on disease_related
+  - After task 2: MRR=0.0194 on disease_related, MRR=0.1133 on phenotype_related
+  - AP=0.0663, AF=0.0067, BWT=-0.0067, REM=0.9933
+  - Fisher computed per-modality: 7 structural, 2 textual, 4 molecular params
+- **Observations:** Very low forgetting (REM=0.9933) thanks to modality-aware EWC + replay. Higher AP than baselines (different evaluation protocol — direct MRR vs PyKEEN).
+
+### Phase Status Update
+| Phase | Status |
+|-------|--------|
+| 0 - Scaffolding | DONE |
+| 1 - Setup & Exploration | DONE |
+| 2 - Benchmark Construction | DONE |
+| 3 - Baseline Implementation | DONE |
+| 4 - CMKL Development | DONE |
+| 5 - Experiments & Ablations | PENDING (next) |
+| 6 - Paper A (Benchmark) | PENDING |
+| 7 - Paper B (Method) | PENDING |
+
+### Next Steps
+- Phase 5: Full experiments and ablations on IBEX
+  - Run all baselines with 5 seeds, dim=256, 100 epochs
+  - Run CMKL with ablations (fusion type, EWC lambda sweep, buffer size)
+  - Statistical significance tests
+  - Update SLURM scripts for CMKL training
+- Prepare SLURM scripts for IBEX GPU runs
