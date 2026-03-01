@@ -1,0 +1,33 @@
+# CMKL (Continual Multimodal KG Learner) Configuration
+# Extends base.yaml
+
+defaults:
+  - base
+
+cmkl:
+  # Encoder settings
+  structural_encoder: rgcn  # rgcn | gat
+  text_encoder: microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract
+  freeze_text_encoder: true
+  use_molecular: true
+  molecular_input_dim: 1024  # Morgan fingerprint dimension
+
+  # Fusion
+  fusion_type: cross_attention  # cross_attention | concatenation
+  num_attention_heads: 4
+
+  # Modality-aware EWC
+  lambda_struct: 10.0   # Sweep: [0.1, 1.0, 5.0, 10.0, 50.0, 100.0]
+  lambda_text: 5.0      # Sweep: [0.1, 1.0, 5.0, 10.0, 50.0, 100.0]
+  lambda_mol: 1.0       # Sweep: [0.1, 1.0, 5.0, 10.0, 50.0, 100.0]
+
+  # Multimodal memory replay
+  replay_buffer_size: 1000  # Sweep: [100, 250, 500, 1000, 2000, 5000]
+  replay_strategy: full_multimodal  # full_multimodal | partial_modality
+  replay_selection: diverse  # diverse (K-means) | random
+  replay_ratio: 0.3
+
+  # Knowledge distillation (optional)
+  use_distillation: false
+  distillation_temperature: 2.0
+  distillation_alpha: 0.5
