@@ -16,20 +16,35 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 
 logger = logging.getLogger(__name__)
 
+# Publication defaults
+plt.rcParams.update({
+    "font.size": 12,
+    "axes.titlesize": 14,
+    "axes.labelsize": 12,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "legend.fontsize": 10,
+    "figure.dpi": 150,
+})
+
 
 def plot_results_heatmap(
-    results_matrix: "np.ndarray",
+    results_matrix: np.ndarray,
     task_names: list[str],
     method_name: str = "",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
 ) -> None:
     """Plot results matrix as a heatmap.
 
     R[i][j] = performance on task j after training on task i.
+    Only lower-triangular entries are meaningful (tasks seen so far).
 
     Args:
         results_matrix: Shape (n_tasks, n_tasks).
@@ -37,46 +52,139 @@ def plot_results_heatmap(
         method_name: Title for the plot.
         save_path: If provided, save figure to this path.
     """
-    raise NotImplementedError("Phase 3: Implement results heatmap")
+    R = np.asarray(results_matrix)
+    n = R.shape[0]
+
+    # Mask upper triangle (tasks not yet seen)
+    mask = np.triu(np.ones_like(R, dtype=bool), k=1)
+
+    fig, ax = plt.subplots(figsize=(max(6, n * 1.2), max(5, n)))
+    sns.heatmap(
+        R, mask=mask, annot=True, fmt=".3f", cmap="YlOrRd",
+        xticklabels=task_names, yticklabels=task_names,
+        vmin=0, vmax=max(0.5, R[~mask].max() * 1.1) if R[~mask].size > 0 else 0.5,
+        ax=ax, linewidths=0.5,
+    )
+    ax.set_xlabel("Evaluated on task")
+    ax.set_ylabel("After training on task")
+    title = "Results Matrix"
+    if method_name:
+        title += f" - {method_name}"
+    ax.set_title(title)
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, bbox_inches="tight")
+        logger.info(f"Saved heatmap to {save_path}")
+    plt.close(fig)
 
 
 def plot_method_comparison(
     method_metrics: dict[str, dict],
-    metrics_to_plot: list[str] = None,
-    save_path: Optional[str] = None,
+    metrics_to_plot: list[str] | None = None,
+    save_path: str | None = None,
 ) -> None:
     """Bar chart comparing methods across CL metrics.
 
     Args:
-        method_metrics: Dict of method_name -> {metric: value}.
-        metrics_to_plot: Which metrics to include (default: AP, AF, BWT, FWT).
+        method_metrics: Dict of method_name -> {metric_name: value}.
+        metrics_to_plot: Which metrics to include.
+            Default: AP, AF, BWT, FWT, REM.
         save_path: If provided, save figure to this path.
     """
-    raise NotImplementedError("Phase 3: Implement method comparison plot")
+    if metrics_to_plot is None:
+        metrics_to_plot = [
+            "Average Performance (AP)",
+            "Average Forgetting (AF)",
+            "Backward Transfer (BWT)",
+            "Forward Transfer (FWT)",
+            "Remembering (REM)",
+        ]
+
+    methods = list(method_metrics.keys())
+    n_methods = len(methods)
+    n_metrics = len(metrics_to_plot)
+
+    fig, axes = plt.subplots(1, n_metrics, figsize=(4 * n_metrics, 5))
+    if n_metrics == 1:
+        axes = [axes]
+
+    colors = sns.color_palette("Set2", n_methods)
+
+    for ax, metric in zip(axes, metrics_to_plot):
+        vals = [method_metrics[m].get(metric, 0.0) for m in methods]
+        bars = ax.bar(range(n_methods), vals, color=colors)
+        ax.set_xticks(range(n_methods))
+        ax.set_xticklabels(methods, rotation=45, ha="right")
+        # Short label
+        short = metric.split("(")[-1].rstrip(")") if "(" in metric else metric
+        ax.set_title(short)
+        ax.set_ylabel(metric)
+        for bar, v in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                    f"{v:.3f}", ha="center", va="bottom", fontsize=9)
+
+    plt.suptitle("Method Comparison", fontsize=14, y=1.02)
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, bbox_inches="tight")
+        logger.info(f"Saved comparison to {save_path}")
+    plt.close(fig)
 
 
 def plot_forgetting_curves(
-    method_results: dict[str, "np.ndarray"],
+    method_results: dict[str, np.ndarray],
     task_names: list[str],
-    save_path: Optional[str] = None,
+    target_task: int = 0,
+    save_path: str | None = None,
 ) -> None:
     """Plot forgetting curves over task sequence for multiple methods.
 
-    Shows how performance on task 0 degrades as more tasks are learned.
+    Shows how performance on a target task (default: task 0) changes
+    as more tasks are learned.
 
     Args:
-        method_results: Dict of method_name -> results_matrix.
+        method_results: Dict of method_name -> results_matrix (n x n).
         task_names: Task labels.
+        target_task: Which task to track forgetting for.
         save_path: If provided, save figure to this path.
     """
-    raise NotImplementedError("Phase 3: Implement forgetting curves")
+    fig, ax = plt.subplots(figsize=(8, 5))
+    colors = sns.color_palette("Set2", len(method_results))
+
+    for (method, R), color in zip(method_results.items(), colors):
+        R = np.asarray(R)
+        n = R.shape[0]
+        # Performance on target_task after training on task 0, 1, 2, ...
+        perf = [R[i, target_task] for i in range(target_task, n)]
+        x = list(range(target_task, n))
+        ax.plot(x, perf, marker="o", label=method, color=color, linewidth=2)
+
+    ax.set_xlabel("After training on task")
+    ax.set_ylabel(f"Performance on {task_names[target_task]}")
+    ax.set_title(f"Forgetting Curve - {task_names[target_task]}")
+    ax.set_xticks(range(len(task_names)))
+    ax.set_xticklabels(task_names, rotation=45, ha="right")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, bbox_inches="tight")
+        logger.info(f"Saved forgetting curves to {save_path}")
+    plt.close(fig)
 
 
 def plot_sensitivity_sweep(
     sweep_values: list,
     sweep_results: list[dict],
     param_name: str,
-    save_path: Optional[str] = None,
+    metrics_to_plot: list[str] | None = None,
+    save_path: str | None = None,
 ) -> None:
     """Plot hyperparameter sensitivity (buffer size, lambda sweeps).
 
@@ -84,6 +192,34 @@ def plot_sensitivity_sweep(
         sweep_values: List of parameter values tested.
         sweep_results: List of metric dicts, one per value.
         param_name: Name of the swept parameter.
+        metrics_to_plot: Which metrics to show. Default: AP, AF.
         save_path: If provided, save figure to this path.
     """
-    raise NotImplementedError("Phase 5: Implement sensitivity plot")
+    if metrics_to_plot is None:
+        metrics_to_plot = [
+            "Average Performance (AP)",
+            "Average Forgetting (AF)",
+        ]
+
+    fig, axes = plt.subplots(1, len(metrics_to_plot),
+                              figsize=(5 * len(metrics_to_plot), 4))
+    if len(metrics_to_plot) == 1:
+        axes = [axes]
+
+    for ax, metric in zip(axes, metrics_to_plot):
+        vals = [r.get(metric, 0.0) for r in sweep_results]
+        ax.plot(range(len(sweep_values)), vals, marker="s", linewidth=2)
+        ax.set_xticks(range(len(sweep_values)))
+        ax.set_xticklabels([str(v) for v in sweep_values])
+        ax.set_xlabel(param_name)
+        short = metric.split("(")[-1].rstrip(")") if "(" in metric else metric
+        ax.set_ylabel(short)
+        ax.set_title(f"{short} vs {param_name}")
+        ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, bbox_inches="tight")
+        logger.info(f"Saved sweep plot to {save_path}")
+    plt.close(fig)

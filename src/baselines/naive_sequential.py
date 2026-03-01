@@ -17,9 +17,18 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict
-from typing import Optional
 
 import numpy as np
+import torch
+
+from src.baselines._base import (
+    build_global_mappings,
+    create_model,
+    evaluate_link_prediction,
+    get_device,
+    make_triples_factory,
+    train_epoch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +44,9 @@ class NaiveSequentialTrainer:
         embedding_dim: Dimension of entity/relation embeddings.
         num_epochs: Training epochs per task.
         lr: Learning rate.
-        device: 'cuda' or 'cpu'.
+        batch_size: Training batch size.
+        device: 'cuda', 'mps', 'cpu', or 'auto'.
+        seed: Random seed.
     """
 
     def __init__(
@@ -44,13 +55,17 @@ class NaiveSequentialTrainer:
         embedding_dim: int = 256,
         num_epochs: int = 100,
         lr: float = 0.001,
-        device: str = "cuda",
+        batch_size: int = 256,
+        device: str = "auto",
+        seed: int = 42,
     ) -> None:
         self.model_name = model_name
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
         self.lr = lr
-        self.device = device
+        self.batch_size = batch_size
+        self.device = get_device(device)
+        self.seed = seed
         self.model = None
 
     def train(
@@ -64,32 +79,61 @@ class NaiveSequentialTrainer:
                 'val': array, 'test': array}}.
 
         Returns:
-            results_matrix: R[i][j] = performance on task j's test set
+            results_matrix: R[i][j] = MRR on task j's test set
                 after training on task i. Shape (n_tasks, n_tasks).
         """
-        raise NotImplementedError("Phase 3: Implement naive sequential training")
+        task_names = list(task_sequence.keys())
+        n_tasks = len(task_names)
 
-    def _build_global_mappings(
-        self,
-        task_sequence: OrderedDict[str, dict],
-    ) -> tuple[dict, dict]:
-        """Build entity_to_id and relation_to_id covering all tasks.
+        # Build global mappings
+        entity_to_id, relation_to_id = build_global_mappings(task_sequence)
 
-        Args:
-            task_sequence: Full task sequence.
+        # Create TriplesFactories for all tasks
+        task_factories = {}
+        for name, data in task_sequence.items():
+            task_factories[name] = {
+                split: make_triples_factory(arr, entity_to_id, relation_to_id)
+                for split, arr in data.items()
+                if len(arr) > 0
+            }
 
-        Returns:
-            Tuple of (entity_to_id, relation_to_id) dicts.
-        """
-        raise NotImplementedError("Phase 3: Implement global ID mappings")
+        # Initialize model
+        first_tf = task_factories[task_names[0]]["train"]
+        self.model = create_model(
+            self.model_name, first_tf,
+            embedding_dim=self.embedding_dim,
+            random_seed=self.seed,
+        )
+        self.model = self.model.to(self.device)
 
-    def _evaluate_task(self, task_data: dict) -> float:
-        """Evaluate current model on a single task's test set.
+        # Results matrix
+        R = np.zeros((n_tasks, n_tasks))
 
-        Args:
-            task_data: Dict with 'test' key containing test triples.
+        for i, task_name in enumerate(task_names):
+            logger.info(f"=== Training on task {i}: {task_name} ===")
 
-        Returns:
-            MRR score on the test set.
-        """
-        raise NotImplementedError("Phase 3: Implement task evaluation")
+            train_tf = task_factories[task_name]["train"]
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+
+            # Train
+            for epoch in range(self.num_epochs):
+                loss = train_epoch(
+                    self.model, train_tf, optimizer,
+                    device=self.device, batch_size=self.batch_size,
+                )
+                if (epoch + 1) % max(1, self.num_epochs // 5) == 0:
+                    logger.info(f"  Epoch {epoch + 1}/{self.num_epochs}, loss={loss:.4f}")
+
+            # Evaluate on all tasks seen so far
+            for j in range(i + 1):
+                test_name = task_names[j]
+                test_tf = task_factories[test_name]["test"]
+                metrics = evaluate_link_prediction(
+                    self.model, test_tf,
+                    device=self.device, batch_size=self.batch_size,
+                )
+                R[i, j] = metrics["MRR"]
+                logger.info(f"  Eval {test_name}: MRR={metrics['MRR']:.4f}, "
+                           f"H@10={metrics['Hits@10']:.4f}")
+
+        return R

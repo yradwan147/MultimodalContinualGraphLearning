@@ -417,7 +417,46 @@ Used for: cross-session context recovery, progress reporting to Prof. Zhang.
 | disgenet | FAILED (API changed) | - |
 
 ### Next Steps
-- Begin Phase 3: Baseline implementation (naive sequential, joint training, EWC, experience replay)
 - When DrugBank/UMLS licenses arrive, enable those databases and rebuild t1
 - Re-enable Reactome when server is accessible
 - Investigate disease_phenotype_positive low count (661 edges) — may need better MONDO-OMIM cross-reference matching in HPOA processing
+
+---
+
+## 2026-03-01 Session 5 - Phase 3: Baseline Implementation
+
+### Changes Made
+- `src/evaluation/metrics.py`: Implemented MRR, Hits@K, AUPRC, full CL metrics (AP, AF, BWT, FWT, REM) from results matrix R[i][j]
+- `src/evaluation/statistical.py`: Implemented paired t-test, Wilcoxon signed-rank, summarize_results, pairwise_significance_table
+- `src/evaluation/visualization.py`: Implemented plot_results_heatmap, plot_method_comparison, plot_forgetting_curves, plot_sensitivity_sweep
+- `src/baselines/_base.py`: Created shared infrastructure (load_task_sequence, build_global_mappings, make_triples_factory, create_model, evaluate_link_prediction, train_epoch with negative sampling + margin loss)
+- `src/baselines/naive_sequential.py`: Full NaiveSequentialTrainer — sequential training, warm-start, results matrix
+- `src/baselines/joint_training.py`: Full JointTrainer — concatenate all tasks, single training run
+- `src/baselines/ewc.py`: Full EWC_KGE mechanism (Fisher diagonal, EWC penalty) + EWCTrainer wrapper
+- `src/baselines/experience_replay.py`: Full ExperienceReplayKGE (random/relation_balanced selection) + ReplayTrainer
+- `src/baselines/lkge.py`: LKGEWrapper with convert_to_lkge_format, get_run_command
+- `scripts/run_baselines.py`: Full CLI orchestrator with --baseline, --quick, --task-names, --device, CL metrics computation, JSON result saving
+
+### Architecture Notes
+- All KGE baselines use PyKEEN (TransE/ComplEx/DistMult/RotatE)
+- Custom training loop with negative sampling + margin ranking loss (not PyKEEN's pipeline, for CL flexibility)
+- Global entity/relation mappings built across ALL tasks for consistent indexing
+- `_base.py` provides shared functionality; each baseline extends it
+
+### Smoke Test Results (--quick mode, 2 small tasks, 10 epochs, dim=64)
+| Baseline | AP | AF | BWT | Notes |
+|----------|-----|-----|------|-------|
+| Naive Sequential | 0.0022 | 0.0035 | -0.0035 | Expected: shows forgetting |
+| Joint Training | 0.0051 | - | - | Expected: higher AP (upper bound) |
+| EWC (λ=10) | ~0.002 | ~0.003 | ~-0.003 | EWC penalty added correctly |
+| Replay (buf=500) | ~0.003 | ~0.002 | ~-0.002 | Mixed training working |
+
+All baselines run end-to-end with correct CL metric computation.
+
+### Next Steps
+- Phase 3 code complete. For real experiments, run on IBEX with:
+  - Full task sequence (6 tasks including base)
+  - embedding_dim=256, num_epochs=100+, 5 seeds
+  - SLURM scripts needed
+- Phase 4: CMKL model development (encoders, fusion, modality-aware EWC)
+- RAG agent baseline deferred (needs LLM, for KGQA task)

@@ -1,0 +1,34 @@
+{
+  "baseline": "joint_training",
+  "model": "TransE",
+  "embedding_dim": 64,
+  "num_epochs": 10,
+  "lr": 0.001,
+  "task_names": [
+    "task_1_disease_related",
+    "task_3_phenotype_related"
+  ],
+  "seeds": [
+    42
+  ],
+  "results": [
+    {
+      "Average Performance (AP)": 0.005145045462995768,
+      "Average Forgetting (AF)": 0.0,
+      "Backward Transfer (BWT)": 0.0,
+      "Forward Transfer (FWT)": 0.004926132969558239,
+      "Remembering (REM)": 1.0,
+      "seed": 42,
+      "results_matrix": [
+        [
+          0.005363957956433296,
+          0.004926132969558239
+        ],
+        [
+          0.005363957956433296,
+          0.004926132969558239
+        ]
+      ]
+    }
+  ]
+}
