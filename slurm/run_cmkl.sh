@@ -1,17 +1,15 @@
 #!/bin/bash --login
-#SBATCH --time=24:00:00
+#SBATCH --time=06:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --partition=batch
 #SBATCH --cpus-per-gpu=2
-#SBATCH --mem=10G
+#SBATCH --mem=32G
 #SBATCH -J mcgl_cmkl
 #SBATCH -o mcgl_cmkl_%J.out
 
-# Run CMKL experiments on IBEX
-# Usage:
-#   sbatch slurm/run_cmkl.sh                # default DistMult
-#   sbatch slurm/run_cmkl.sh TransE         # specific decoder
+# Run CMKL experiment on IBEX
+# Usage: sbatch slurm/run_cmkl.sh [decoder]
 
 source ~/miniconda3/bin/activate
 conda activate mcgl
