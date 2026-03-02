@@ -37,6 +37,7 @@ python scripts/run_baselines.py \
     --batch-size 512 \
     --device cuda \
     --seeds 42 123 456 789 1024 \
-    --output-dir results
+    --output-dir results \
+    --eval-multihop
 
 echo "End: $(date)"

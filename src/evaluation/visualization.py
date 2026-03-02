@@ -223,3 +223,58 @@ def plot_sensitivity_sweep(
         fig.savefig(save_path, bbox_inches="tight")
         logger.info(f"Saved sweep plot to {save_path}")
     plt.close(fig)
+
+
+def plot_multihop_comparison(
+    method_results: dict[str, dict[str, float]],
+    save_path: str | None = None,
+) -> None:
+    """Grouped bar chart comparing multi-hop MRR across methods and path types.
+
+    Args:
+        method_results: Dict of method_name -> {path_description: MRR_value}.
+            Each key is a path type description (e.g. "drug -> protein -> disease").
+        save_path: If provided, save figure to this path.
+    """
+    if not method_results:
+        logger.warning("No multi-hop results to plot")
+        return
+
+    methods = list(method_results.keys())
+    # Collect all path types across methods
+    all_path_types = sorted({
+        pt for m_res in method_results.values() for pt in m_res.keys()
+    })
+
+    if not all_path_types:
+        logger.warning("No path types found in multi-hop results")
+        return
+
+    n_methods = len(methods)
+    n_types = len(all_path_types)
+    x = np.arange(n_types)
+    width = 0.8 / n_methods
+
+    fig, ax = plt.subplots(figsize=(max(10, n_types * 1.5), 6))
+    colors = sns.color_palette("Set2", n_methods)
+
+    for i, method in enumerate(methods):
+        vals = [method_results[method].get(pt, 0.0) for pt in all_path_types]
+        offset = (i - n_methods / 2 + 0.5) * width
+        ax.bar(x + offset, vals, width, label=method, color=colors[i])
+
+    # Shorten path type labels for readability
+    short_labels = [pt.replace(" -> ", "\u2192") for pt in all_path_types]
+    ax.set_xticks(x)
+    ax.set_xticklabels(short_labels, rotation=45, ha="right", fontsize=9)
+    ax.set_ylabel("Multi-hop MRR")
+    ax.set_title("Multi-Hop Reasoning: MRR by Path Type")
+    ax.legend(loc="upper right")
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, bbox_inches="tight")
+        logger.info(f"Saved multi-hop comparison to {save_path}")
+    plt.close(fig)

@@ -114,6 +114,8 @@ papers/paper_b_method/
 ├── tables/
 │   ├── comparison.tex      # Table 1: CMKL vs prior CKGE methods (\cmark/\xmark)
 │   ├── main_results.tex    # CMKL vs all baselines on LP
+│   ├── multihop_results.tex # Multi-hop MRR by path type × method (NEW)
+│   ├── efficiency_comparison.tex # KGE vs CMKL vs LLM vs RAG efficiency (NEW)
 │   ├── ablation.tex        # All 8 ablation results
 │   ├── lambda_analysis.tex # Per-modality lambda sensitivity
 │   └── buffer_sweep.tex    # Buffer size sensitivity
@@ -154,6 +156,11 @@ Use `\paragraph{}` topics:
 - `\paragraph{Biomedical KG Reasoning.}` — TxGNN, ProCyon, AMG-RAG
 - `\paragraph{Elastic Weight Consolidation.}` — Original EWC, online EWC, progress & compress
 - `\paragraph{Experience Replay for CL.}` — GEM, A-GEM, ER-GNN, BER
+- `\paragraph{LLMs for Knowledge Graphs.}` — **NEW (KG vs LLM discussion)**
+  - LLM-based KG completion approaches (Yao et al. 2023, Zhang et al. 2023) and their limitations
+  - Graph structure as inductive bias that LLMs lack — message passing propagates neighborhood info
+  - CMKL's R-GCN (2 layers) explicitly captures 2-hop structural patterns; LLMs rely on implicit co-occurrence
+  - Cite Pan et al. 2024 (Unifying LLMs and KGs)
 - Final positioning paragraph
 
 ### 4.4 Problem Formulation (in `sec/3_method.tex`, opening)
@@ -203,12 +210,22 @@ Use `\paragraph{}` topics:
 - `\subsection{Main Results}` — CMKL vs 6 baselines, main results table
   - Wraptable with MRR, Hits@1/3/10, AP, AF, BWT, REM
   - Discussion: best model, improvement margins, what fails
+- `\subsection{Multi-Hop Reasoning Analysis}` — **NEW**
+  - CMKL's R-GCN (2 layers) captures multi-hop better than flat KGE baselines AND RAG
+  - Cross-modal attention further improves multi-hop (text/molecular features on intermediate entities enrich path representations)
+  - Results table: multi-hop MRR by path type for CMKL vs baselines
 - `\subsection{Ablation Studies}` — 8 ablations table
   - struct_only, text_only, concat_fusion, global_ewc, random_replay, distillation
   - Analysis of each ablation's impact
 - `\subsection{Sensitivity Analysis}`
   - Buffer size sweep figure
   - Lambda sweep figure (per-modality)
+- `\subsection{Why Graph Structure Matters}` — **NEW (Discussion/Analysis)**
+  Three-pronged argument:
+  1. **PrimeKG is from structured databases, not text.** Drug-protein targets from DrugBank assays, PPIs from BioGRID experiments, GO annotations — this curated experimental knowledge has no textual equivalent in PubMed literature. LLMs trained on text miss this.
+  2. **Multi-hop results prove structural encoding helps.** R-GCN propagates neighborhood info into embeddings; RAG treats triples independently. Empirical multi-hop MRR gap demonstrates this.
+  3. **Efficiency.** KGE/CMKL: ~2-6M params, 1 GPU, minutes to update. LLM fine-tune: 7-70B params, 8+ GPUs, hours. RAG: 7B + index, re-index on update.
+  - Include efficiency comparison table (`tables/efficiency_comparison.tex`)
 - `\subsection{Analysis}`
   - Per-modality forgetting visualization
   - Which modality benefits most from protection?
@@ -295,6 +312,9 @@ Generate all 15 questions with `\answerYes{}`/`\answerNo{}`/`\answerNA{}` and ju
 ### NLP/LLM for KG
 - Devlin et al. 2019 — BERT
 - Lewis et al. 2020 — RAG
+- Pan et al. 2024 — Unifying LLMs and KGs (IEEE TKDE) (NEW)
+- Yao et al. 2023 — LLMs for KG completion (NEW)
+- Zhang et al. 2023 — Making LLMs better on KG tasks (NEW)
 
 ---
 

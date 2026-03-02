@@ -92,6 +92,32 @@ def compute_link_prediction_metrics(
     return metrics
 
 
+def compute_multihop_metrics(
+    ranks: np.ndarray,
+    ks: tuple[int, ...] = (1, 3, 10),
+) -> dict[str, float]:
+    """Compute link prediction metrics with 'multihop_' prefix.
+
+    Same metrics as standard LP but prefixed for multi-hop evaluation.
+    Reuses compute_mrr and compute_hits_at_k.
+
+    Args:
+        ranks: Array of integer ranks (1-based).
+        ks: Tuple of K values for Hits@K.
+
+    Returns:
+        Dict with 'multihop_MRR', 'multihop_Hits@K', 'multihop_mean_rank'.
+    """
+    ranks = np.asarray(ranks, dtype=np.float64)
+    metrics = {
+        "multihop_MRR": compute_mrr(ranks),
+        "multihop_mean_rank": float(np.mean(ranks)),
+    }
+    for k in ks:
+        metrics[f"multihop_Hits@{k}"] = compute_hits_at_k(ranks, k)
+    return metrics
+
+
 # ---------------------------------------------------------------------------
 # KGQA metrics
 # ---------------------------------------------------------------------------

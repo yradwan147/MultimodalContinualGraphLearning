@@ -28,6 +28,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 logging.basicConfig(
@@ -91,6 +93,12 @@ def main() -> None:
     parser.add_argument("--buffer-size", type=int, default=500)
     parser.add_argument("--selection-strategy", default="relation_balanced")
     parser.add_argument("--replay-ratio", type=float, default=0.3)
+
+    # Multi-hop evaluation
+    parser.add_argument(
+        "--eval-multihop", action="store_true",
+        help="Run multi-hop path evaluation after training",
+    )
 
     # Quick mode for local testing
     parser.add_argument(
@@ -164,19 +172,40 @@ def main() -> None:
                 if isinstance(val, float):
                     logger.info(f"  {name}: {val:.4f}")
 
+        # Multi-hop evaluation (if requested)
+        multihop_results = None
+        if args.eval_multihop:
+            from src.evaluation.multihop import extract_all_path_types
+
+            logger.info("Running multi-hop path evaluation...")
+            # Collect all training triples across tasks
+            all_train = np.concatenate(
+                [data["train"] for data in task_seq.values()], axis=0,
+            )
+            all_paths = extract_all_path_types(
+                all_train, relation_to_id, max_paths_per_type=5000,
+            )
+            multihop_results = {}
+            for desc, paths in all_paths.items():
+                multihop_results[desc] = {"num_paths": len(paths)}
+                logger.info(f"  {desc}: {len(paths):,} paths extracted")
+
         # Save results
         result_path = output_dir / f"{baseline_name}_{args.model}.json"
+        output_data = {
+            "baseline": baseline_name,
+            "model": args.model,
+            "embedding_dim": args.embedding_dim,
+            "num_epochs": args.num_epochs,
+            "lr": args.lr,
+            "task_names": task_names,
+            "seeds": args.seeds,
+            "results": all_seed_results,
+        }
+        if multihop_results:
+            output_data["multihop_paths"] = multihop_results
         with open(result_path, "w") as f:
-            json.dump({
-                "baseline": baseline_name,
-                "model": args.model,
-                "embedding_dim": args.embedding_dim,
-                "num_epochs": args.num_epochs,
-                "lr": args.lr,
-                "task_names": task_names,
-                "seeds": args.seeds,
-                "results": all_seed_results,
-            }, f, indent=2)
+            json.dump(output_data, f, indent=2)
         logger.info(f"Results saved to {result_path}")
 
         # Print aggregate summary
@@ -198,8 +227,6 @@ def _run_baseline(
     seed: int,
 ) -> "np.ndarray":
     """Run a single baseline with a single seed. Returns results matrix."""
-    import numpy as np
-
     if name == "naive_sequential":
         from src.baselines.naive_sequential import NaiveSequentialTrainer
         trainer = NaiveSequentialTrainer(

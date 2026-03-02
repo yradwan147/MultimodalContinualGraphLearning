@@ -77,6 +77,10 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", default="results")
     parser.add_argument(
+        "--eval-multihop", action="store_true",
+        help="Run multi-hop path evaluation after training",
+    )
+    parser.add_argument(
         "--quick", action="store_true",
         help="Quick mode: dim=64, epochs=5, 1 seed",
     )
@@ -168,18 +172,38 @@ def main() -> None:
             if isinstance(val, float):
                 logger.info(f"  {name}: {val:.4f}")
 
+    # Multi-hop evaluation (if requested)
+    multihop_results = None
+    if args.eval_multihop:
+        from src.evaluation.multihop import extract_all_path_types
+
+        logger.info("Running multi-hop path evaluation...")
+        all_train = np.concatenate(
+            [data["train"] for data in task_seq.values()], axis=0,
+        )
+        all_paths = extract_all_path_types(
+            all_train, relation_to_id, max_paths_per_type=5000,
+        )
+        multihop_results = {}
+        for desc, paths in all_paths.items():
+            multihop_results[desc] = {"num_paths": len(paths)}
+            logger.info(f"  {desc}: {len(paths):,} paths extracted")
+
     # Save results
     result_path = output_dir / f"cmkl_{args.decoder}.json"
+    output_data = {
+        "method": "cmkl",
+        "decoder": args.decoder,
+        "fusion": args.fusion,
+        "config": config,
+        "task_names": task_names,
+        "seeds": args.seeds,
+        "results": all_seed_results,
+    }
+    if multihop_results:
+        output_data["multihop_paths"] = multihop_results
     with open(result_path, "w") as f:
-        json.dump({
-            "method": "cmkl",
-            "decoder": args.decoder,
-            "fusion": args.fusion,
-            "config": config,
-            "task_names": task_names,
-            "seeds": args.seeds,
-            "results": all_seed_results,
-        }, f, indent=2)
+        json.dump(output_data, f, indent=2)
     logger.info(f"Results saved to {result_path}")
 
     # Aggregate summary

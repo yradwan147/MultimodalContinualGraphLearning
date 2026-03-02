@@ -26,6 +26,7 @@ echo "Start: $(date)"
 python scripts/run_rag.py \
     --questions-per-task 200 \
     --seeds 42 123 456 789 1024 \
-    --output-dir results
+    --output-dir results \
+    --eval-multihop
 
 echo "End: $(date)"

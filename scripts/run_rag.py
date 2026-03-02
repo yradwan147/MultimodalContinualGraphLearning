@@ -141,6 +141,8 @@ def main() -> None:
                         help="Use retrieval-only mode (no LLM)")
     parser.add_argument("--output-dir", default="results")
     parser.add_argument("--seeds", nargs="+", type=int, default=[42])
+    parser.add_argument("--eval-multihop", action="store_true",
+                        help="Run multi-hop RAG evaluation after standard eval")
     parser.add_argument("--quick", action="store_true",
                         help="Quick mode: 10 questions, retrieval-only")
     args = parser.parse_args()
@@ -196,20 +198,67 @@ def main() -> None:
 
         all_seed_results.append(result)
 
+    # Multi-hop RAG evaluation (if requested)
+    multihop_results = None
+    if args.eval_multihop:
+        from src.evaluation.multihop import (
+            extract_all_path_types,
+            evaluate_multihop_rag,
+        )
+
+        logger.info("Running multi-hop RAG evaluation...")
+        all_train = np.concatenate(
+            [data["train"] for data in task_seq.values()], axis=0,
+        )
+        all_paths = extract_all_path_types(
+            all_train, relation_to_id, max_paths_per_type=2000,
+        )
+        id_to_entity = {v: k for k, v in entity_to_id.items()}
+        id_to_relation = {v: k for k, v in relation_to_id.items()}
+
+        # Use the last seed's agent (still in memory) for multi-hop eval
+        from src.baselines.rag_agent import BiomedicalRAGAgent
+        mh_agent = BiomedicalRAGAgent(
+            llm_name=args.llm,
+            embedding_model=args.embedding_model,
+            use_llm=not args.no_llm,
+        )
+        # Index all training data
+        mh_agent.index_kg_snapshot(
+            all_train,
+            id_to_entity=id_to_entity, id_to_relation=id_to_relation,
+        )
+
+        multihop_results = {}
+        for desc, paths in all_paths.items():
+            if not paths:
+                continue
+            mh_metrics = evaluate_multihop_rag(
+                mh_agent, paths, id_to_entity, id_to_relation,
+                max_questions=200,
+            )
+            multihop_results[desc] = mh_metrics
+            logger.info(f"  {desc}: EM={mh_metrics['multihop_EM']:.4f}, "
+                        f"F1={mh_metrics['multihop_F1']:.4f} "
+                        f"({mh_metrics['num_questions']} questions)")
+
     # Save results
     mode = "retrieval_only" if args.no_llm else "full_rag"
     result_path = output_dir / f"rag_{mode}.json"
+    output_data = {
+        "method": "rag_agent",
+        "mode": mode,
+        "llm": args.llm if not args.no_llm else None,
+        "embedding_model": args.embedding_model,
+        "questions_per_task": args.questions_per_task,
+        "task_names": task_names,
+        "seeds": args.seeds,
+        "results": all_seed_results,
+    }
+    if multihop_results:
+        output_data["multihop_results"] = multihop_results
     with open(result_path, "w") as f:
-        json.dump({
-            "method": "rag_agent",
-            "mode": mode,
-            "llm": args.llm if not args.no_llm else None,
-            "embedding_model": args.embedding_model,
-            "questions_per_task": args.questions_per_task,
-            "task_names": task_names,
-            "seeds": args.seeds,
-            "results": all_seed_results,
-        }, f, indent=2, default=str)
+        json.dump(output_data, f, indent=2, default=str)
     logger.info(f"Results saved to {result_path}")
 
 

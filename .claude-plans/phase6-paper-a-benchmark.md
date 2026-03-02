@@ -113,7 +113,8 @@ papers/paper_a_benchmark/
 │   ├── comparison.tex      # Table 1: ours vs prior CGL benchmarks (\cmark/\xmark)
 │   ├── dataset_stats.tex   # t0/t1 statistics
 │   ├── main_results.tex    # All baselines × all metrics
-│   └── per_task.tex        # Per-task breakdown
+│   ├── per_task.tex        # Per-task breakdown
+│   └── multihop_results.tex # Multi-hop MRR by path type × method (NEW)
 ├── figs/                   # Copy from results/, generate new ones
 └── refs.bib                # BibTeX, \bibliographystyle{unsrt}
 ```
@@ -148,6 +149,13 @@ Use `\paragraph{}` topics:
 - `\paragraph{Temporal Knowledge Graphs.}` — ICEWS, YAGO, distinguish event-based vs evolution
 - `\paragraph{CGL Benchmarks.}` — Existing benchmark limitations
 - `\paragraph{Multimodal Graph Learning.}` — MSCGL, OMG-NAS, MoDE
+- `\paragraph{Knowledge Graphs vs.\ Language Models.}` — **NEW (KG vs LLM discussion)**
+  - Cite Pan et al. 2024 survey (Unifying LLMs and KGs, IEEE TKDE)
+  - Position: KGs and LLMs are complementary, not competing
+  - KG advantages: structured multi-hop reasoning, verifiable provenance, efficient incremental updates
+  - LLM advantages: flexible NL understanding, zero-shot capability, but opaque and expensive to update
+  - PrimeKG comes from 20 structured biomedical databases (DrugBank assays, BioGRID PPI experiments, GO annotations) — not text mining. This curated experimental knowledge has no equivalent in PubMed literature
+  - Cite Yao et al. 2023 (LLMs for KG completion), Zhang et al. 2023 (Making LLMs better on KG tasks)
 - Final paragraph positioning our work
 
 ### 4.4 Benchmark Construction (`sec/3_method.tex`)
@@ -167,7 +175,15 @@ Subsections:
 - `\subsection{Link Prediction Results}` — Main results table with wraptable
 - `\subsection{KGQA Results}` — RAG agent results
 - `\subsection{Node Classification Results}` — NC results
+- `\subsection{Multi-Hop Evaluation}` — **NEW**
+  - Define multi-hop prediction task: given source entity, predict 2-hop targets
+  - Present 7 biomedical path types with biological motivation (drug repurposing, mechanism of action, etc.)
+  - Results table (`tables/multihop_results.tex`): all baselines + CMKL multi-hop MRR
+  - Key finding: methods with graph structure (R-GCN, 2 layers) outperform flat KGE methods
+  - RAG struggles with multi-hop (must independently retrieve both triples in the chain)
 - `\subsection{Analysis}` — Forgetting patterns, domain-specific analysis
+  - **Add 1-2 paragraphs** on why graph structure matters based on multi-hop evidence
+  - RAG's inability to retrieve multi-hop chains demonstrates graph structure advantage
 
 ### 4.6 Conclusion (`sec/5_conclusion.tex`)
 Follow spec: Restate → Findings → Limitations → Release/impact + Data Availability Statement
@@ -238,6 +254,11 @@ Generate all 15 questions with `\answerYes{}`/`\answerNo{}`/`\answerNA{}` and ju
 ### Temporal KGs
 - Garcia-Duran et al. 2018 — ICEWS
 - Jin et al. 2020 — RE-NET
+
+### KG vs LLM (NEW)
+- Pan et al. 2024 — Unifying LLMs and KGs (IEEE TKDE)
+- Yao et al. 2023 — LLMs for KG completion
+- Zhang et al. 2023 — Making LLMs better on KG tasks
 
 ### Multimodal
 - Liang et al. 2022 — Multimodal learning survey
