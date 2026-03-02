@@ -88,9 +88,9 @@ class LKGEWrapper:
             for i, r in enumerate(relation_list):
                 f.write(f"{r}\t{i}\n")
 
-        # Write each snapshot
+        # Write each snapshot — LKGE expects dirs named 0/, 1/, 2/, ...
         for idx, (name, data) in enumerate(task_sequence.items()):
-            snap_dir = out / f"snapshot_{idx}"
+            snap_dir = out / str(idx)
             snap_dir.mkdir(exist_ok=True)
 
             for split_name, split_data in data.items():
@@ -100,7 +100,7 @@ class LKGEWrapper:
                         for h, r, t in split_data:
                             f.write(f"{h}\t{r}\t{t}\n")
 
-            logger.info(f"  Wrote snapshot_{idx} ({name}): "
+            logger.info(f"  Wrote {idx}/ ({name}): "
                        f"{len(data.get('train', [])):,} train triples")
 
         logger.info(f"LKGE dataset written to {out} "
@@ -115,6 +115,8 @@ class LKGEWrapper:
         lifelong_name: str = "LKGE",
         model: str = "TransE",
         num_epochs: int = 100,
+        snapshot_num: int | None = None,
+        seed: int = 42,
     ) -> str:
         """Generate the command to run LKGE.
 
@@ -123,18 +125,40 @@ class LKGEWrapper:
             lifelong_name: LKGE method variant.
             model: KGE model to use.
             num_epochs: Training epochs.
+            snapshot_num: Number of snapshots. Auto-detected if None.
+            seed: Random seed.
 
         Returns:
             Command string to execute.
         """
+        # LKGE expects: -data_path <parent>/ -dataset <folder_name>
+        # It constructs paths as: data_path + dataset + '/'
+        abs_dataset_dir = Path(dataset_dir).resolve()
+        data_path = str(abs_dataset_dir.parent) + "/"
+        dataset_name = abs_dataset_dir.name
+        # Checkpoint and log paths must also be absolute to avoid
+        # writing into the LKGE repo directory
+        save_path = str(abs_dataset_dir.parent / "lkge_checkpoints") + "/"
+        log_path = str(abs_dataset_dir.parent / "lkge_logs") + "/"
+        # Auto-detect snapshot count from dataset directory
+        if snapshot_num is None:
+            # Dirs are named 0/, 1/, 2/, ... — count numeric directories
+            snapshot_num = len([
+                d for d in abs_dataset_dir.iterdir()
+                if d.is_dir() and d.name.isdigit()
+            ])
         cmd = (
-            f"cd {self.lkge_dir} && "
             f"python main.py "
-            f"-dataset {dataset_dir} "
+            f"-data_path {data_path} "
+            f"-dataset {dataset_name} "
+            f"-save_path {save_path} "
+            f"-log_path {log_path} "
             f"-gpu {self.gpu_id} "
+            f"-snapshot_num {snapshot_num} "
             f"-lifelong_name {lifelong_name} "
-            f"-model {model} "
-            f"-epoch {num_epochs}"
+            f"-embedding_model {model} "
+            f"-epoch_num {num_epochs} "
+            f"-seed {seed}"
         )
         return cmd
 
@@ -146,6 +170,7 @@ class LKGEWrapper:
         model: str = "TransE",
         num_epochs: int = 100,
         timeout: int = 86400,
+        seed: int = 42,
     ) -> dict:
         """Run LKGE as a subprocess and parse the output.
 
@@ -156,21 +181,26 @@ class LKGEWrapper:
             model: KGE model to use.
             num_epochs: Training epochs.
             timeout: Max runtime in seconds (default 24h).
+            seed: Random seed.
 
         Returns:
             Dict with parsed metrics per snapshot.
         """
-        cmd = self.get_run_command(dataset_dir, lifelong_name, model, num_epochs)
+        cmd = self.get_run_command(
+            dataset_dir, lifelong_name, model, num_epochs, seed=seed
+        )
         logger.info(f"Running LKGE: {cmd}")
 
         out_path = Path(output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
         log_file = out_path / "lkge_run.log"
 
+        # Resolve lkge_dir to absolute so cwd works correctly
+        abs_lkge_dir = str(self.lkge_dir.resolve())
         try:
             result = subprocess.run(
                 cmd, shell=True, capture_output=True, text=True,
-                timeout=timeout, cwd=str(self.lkge_dir),
+                timeout=timeout, cwd=abs_lkge_dir,
             )
             output = result.stdout + "\n" + result.stderr
 

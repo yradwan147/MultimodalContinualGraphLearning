@@ -13,20 +13,20 @@
   ],
   "results": [
     {
-      "Average Performance (AP)": 0.0022697789245285094,
-      "Average Forgetting (AF)": 0.0034832294331863523,
-      "Backward Transfer (BWT)": -0.0034832294331863523,
+      "Average Performance (AP)": 0.002607247675769031,
+      "Average Forgetting (AF)": 0.0035905081313103437,
+      "Backward Transfer (BWT)": -0.0035905081313103437,
       "Forward Transfer (FWT)": 0.0,
-      "Remembering (REM)": 0.9965167705668136,
+      "Remembering (REM)": 0.9964094918686897,
       "seed": 42,
       "results_matrix": [
         [
-          0.004425455816090107,
+          0.004883179906755686,
           0.0
         ],
         [
-          0.0009422263829037547,
-          0.003597331466153264
+          0.001292671775445342,
+          0.00392182357609272
         ]
       ]
     }

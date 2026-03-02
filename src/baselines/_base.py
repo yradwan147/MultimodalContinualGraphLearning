@@ -1,19 +1,21 @@
 """Shared infrastructure for continual KGE baselines.
 
-Provides ContinualKGETrainer base class with:
-- Task data loading from benchmark directory
+Provides:
+- Memory-efficient task loading (int IDs, not string arrays)
 - Global entity/relation mapping across all tasks
-- PyKEEN TriplesFactory creation with shared vocab
+- PyKEEN TriplesFactory creation from pre-mapped triples
 - Model creation (TransE, ComplEx, DistMult, RotatE)
 - Evaluation (MRR, Hits@K) on arbitrary test sets
 - Results matrix tracking
 
-All concrete baselines extend this class.
+All concrete baselines extend this module's functions.
 """
 
 from __future__ import annotations
 
 import logging
+import resource
+import sys
 from collections import OrderedDict
 from pathlib import Path
 
@@ -24,6 +26,14 @@ from pykeen.triples import TriplesFactory
 
 logger = logging.getLogger(__name__)
 
+
+def _log_mem(label: str) -> None:
+    """Log current RSS memory usage."""
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    rss_mb = rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
+    logger.info(f"[MEM] {label}: {rss_mb:.0f} MB")
+
+
 MODEL_REGISTRY = {
     "TransE": TransE,
     "ComplEx": ComplEx,
@@ -32,40 +42,93 @@ MODEL_REGISTRY = {
 }
 
 
-def load_triples_file(path: str | Path) -> np.ndarray:
-    """Load a tab-separated triples file (head, relation, tail).
+# ---------------------------------------------------------------------------
+# Memory-efficient data loading: stream files → int ID arrays directly
+# Never creates numpy string arrays (which use fixed-width dtype and
+# consume ~50 GB for 8M triples).
+# ---------------------------------------------------------------------------
 
-    Args:
-        path: Path to .txt file with tab-separated triples.
+def _scan_vocab(
+    tasks_dir: Path,
+    task_names: list[str],
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Stream all task files to build entity/relation vocabularies.
+
+    Reads files line by line without storing strings in memory.
 
     Returns:
-        NumPy array of shape (n, 3) with string entries.
+        (entity_to_id, relation_to_id) dicts.
     """
-    triples = []
-    with open(str(path)) as f:
+    entities: set[str] = set()
+    relations: set[str] = set()
+
+    for name in task_names:
+        for split_file in ("train.txt", "valid.txt", "test.txt"):
+            path = tasks_dir / name / split_file
+            if not path.exists():
+                continue
+            with open(path) as f:
+                for line in f:
+                    parts = line.strip().split("\t")
+                    if len(parts) == 3:
+                        entities.add(parts[0])
+                        entities.add(parts[2])
+                        relations.add(parts[1])
+
+    entity_to_id = {e: i for i, e in enumerate(sorted(entities))}
+    relation_to_id = {r: i for i, r in enumerate(sorted(relations))}
+    logger.info(f"Global vocab: {len(entity_to_id):,} entities, "
+                f"{len(relation_to_id)} relations")
+    return entity_to_id, relation_to_id
+
+
+def _load_mapped_triples(
+    path: Path,
+    entity_to_id: dict[str, int],
+    relation_to_id: dict[str, int],
+) -> np.ndarray:
+    """Load a triples file directly as int64 array using pre-built mappings.
+
+    Args:
+        path: Path to tab-separated triples file.
+        entity_to_id: Entity string → int mapping.
+        relation_to_id: Relation string → int mapping.
+
+    Returns:
+        int64 numpy array of shape (n, 3) with columns [head_id, relation_id, tail_id].
+    """
+    ids: list[list[int]] = []
+    with open(path) as f:
         for line in f:
             parts = line.strip().split("\t")
             if len(parts) == 3:
-                triples.append(parts)
-    return np.array(triples, dtype=str)
+                h, r, t = parts
+                if h in entity_to_id and r in relation_to_id and t in entity_to_id:
+                    ids.append([entity_to_id[h], relation_to_id[r], entity_to_id[t]])
+    if not ids:
+        return np.empty((0, 3), dtype=np.int64)
+    return np.array(ids, dtype=np.int64)
 
 
 def load_task_sequence(
     tasks_dir: str | Path,
     task_names: list[str] | None = None,
-) -> OrderedDict[str, dict[str, np.ndarray]]:
-    """Load task sequence from benchmark directory.
+) -> tuple[OrderedDict[str, dict[str, np.ndarray]], dict[str, int], dict[str, int]]:
+    """Load task sequence as memory-efficient int arrays.
 
-    Each task directory should contain train.txt, valid.txt, test.txt
-    with tab-separated triples (head, relation, tail).
+    Two-pass approach:
+    1. Stream all files to build entity/relation vocabularies
+    2. Stream again to convert triples directly to int64 arrays
+
+    Memory usage: ~200 MB for 8M triples (vs ~50 GB with numpy string arrays).
 
     Args:
         tasks_dir: Path to benchmark/tasks directory.
-        task_names: Specific task names to load. If None, loads all
-            sorted alphabetically.
+        task_names: Specific task names to load. If None, loads all sorted.
 
     Returns:
-        OrderedDict mapping task_name -> {'train': array, 'val': array, 'test': array}.
+        Tuple of (tasks, entity_to_id, relation_to_id) where tasks is
+        OrderedDict mapping task_name → {'train': int64_array, 'val': ..., 'test': ...}.
     """
     tasks_dir = Path(tasks_dir)
 
@@ -75,69 +138,53 @@ def load_task_sequence(
             if d.is_dir() and (d / "train.txt").exists()
         ])
 
-    tasks = OrderedDict()
+    _log_mem("before loading tasks")
+
+    # Pass 1: build vocab by streaming files
+    entity_to_id, relation_to_id = _scan_vocab(tasks_dir, task_names)
+    _log_mem("after vocab scan")
+
+    # Pass 2: load triples as int arrays
+    split_map = {"train": "train.txt", "val": "valid.txt", "test": "test.txt"}
+    tasks: OrderedDict[str, dict[str, np.ndarray]] = OrderedDict()
+
     for name in task_names:
         task_dir = tasks_dir / name
-        tasks[name] = {
-            "train": load_triples_file(task_dir / "train.txt"),
-            "val": load_triples_file(task_dir / "valid.txt"),
-            "test": load_triples_file(task_dir / "test.txt"),
-        }
-        total = sum(len(v) for v in tasks[name].values())
+        task_data: dict[str, np.ndarray] = {}
+        for split_key, filename in split_map.items():
+            task_data[split_key] = _load_mapped_triples(
+                task_dir / filename, entity_to_id, relation_to_id
+            )
+        tasks[name] = task_data
+
+        total = sum(len(v) for v in task_data.values())
         logger.info(f"Loaded {name}: {total:,} triples "
-                    f"(train={len(tasks[name]['train']):,}, "
-                    f"val={len(tasks[name]['val']):,}, "
-                    f"test={len(tasks[name]['test']):,})")
+                    f"(train={len(task_data['train']):,}, "
+                    f"val={len(task_data['val']):,}, "
+                    f"test={len(task_data['test']):,})")
+        _log_mem(f"after loading {name}")
 
-    return tasks
-
-
-def build_global_mappings(
-    task_sequence: OrderedDict[str, dict[str, np.ndarray]],
-) -> tuple[dict[str, int], dict[str, int]]:
-    """Build entity_to_id and relation_to_id covering all tasks.
-
-    Args:
-        task_sequence: Full task sequence from load_task_sequence.
-
-    Returns:
-        Tuple of (entity_to_id, relation_to_id) dicts.
-    """
-    entities = set()
-    relations = set()
-
-    for task_data in task_sequence.values():
-        for split in task_data.values():
-            if len(split) > 0:
-                entities.update(split[:, 0])  # heads
-                entities.update(split[:, 2])  # tails
-                relations.update(split[:, 1])  # relations
-
-    entity_to_id = {e: i for i, e in enumerate(sorted(entities))}
-    relation_to_id = {r: i for i, r in enumerate(sorted(relations))}
-
-    logger.info(f"Global vocab: {len(entity_to_id):,} entities, "
-                f"{len(relation_to_id)} relations")
-    return entity_to_id, relation_to_id
+    return tasks, entity_to_id, relation_to_id
 
 
 def make_triples_factory(
-    triples: np.ndarray,
+    mapped_triples: np.ndarray,
     entity_to_id: dict[str, int],
     relation_to_id: dict[str, int],
 ) -> TriplesFactory:
-    """Create a PyKEEN TriplesFactory with global mappings.
+    """Create a PyKEEN TriplesFactory from pre-mapped int triples.
 
     Args:
-        triples: Array of shape (n, 3) with string (head, relation, tail).
-        entity_to_id: Global entity mapping.
-        relation_to_id: Global relation mapping.
+        mapped_triples: int64 array of shape (n, 3) with [head_id, rel_id, tail_id].
+        entity_to_id: Entity string → int mapping.
+        relation_to_id: Relation string → int mapping.
 
     Returns:
-        TriplesFactory with mapped triples.
+        TriplesFactory ready for PyKEEN training/evaluation.
     """
-    return TriplesFactory.from_labeled_triples(
-        triples,
+    tensor = torch.as_tensor(mapped_triples, dtype=torch.long)
+    return TriplesFactory(
+        mapped_triples=tensor,
         entity_to_id=entity_to_id,
         relation_to_id=relation_to_id,
     )
@@ -194,6 +241,7 @@ def evaluate_link_prediction(
     """
     from pykeen.evaluation import RankBasedEvaluator
 
+    _log_mem(f"before eval ({test_factory.num_triples:,} test triples)")
     model = model.to(device)
     model.eval()
     evaluator = RankBasedEvaluator()
@@ -204,6 +252,7 @@ def evaluate_link_prediction(
         additional_filter_triples=None,
         batch_size=batch_size,
     )
+    _log_mem("after eval")
 
     # Extract realistic (pessimistic) metrics
     metrics = {

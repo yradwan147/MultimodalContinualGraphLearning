@@ -8,7 +8,7 @@ how much forgetting matters on this benchmark.
 Usage:
     from src.baselines.joint_training import JointTrainer
     trainer = JointTrainer(model_name='TransE')
-    per_task_results = trainer.train(task_sequence)
+    per_task_results = trainer.train(task_sequence, entity_to_id, relation_to_id)
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from src.baselines._base import (
-    build_global_mappings,
+    _log_mem,
     create_model,
     evaluate_link_prediction,
     get_device,
@@ -65,12 +65,15 @@ class JointTrainer:
     def train(
         self,
         task_sequence: OrderedDict[str, dict],
+        entity_to_id: dict[str, int],
+        relation_to_id: dict[str, int],
     ) -> dict[str, dict]:
         """Train on concatenated data from all tasks.
 
         Args:
-            task_sequence: OrderedDict of {task_name: {'train': array,
-                'val': array, 'test': array}}.
+            task_sequence: OrderedDict of {task_name: {'train': int64_array, ...}}.
+            entity_to_id: Global entity → int mapping.
+            relation_to_id: Global relation → int mapping.
 
         Returns:
             Dict mapping task_name -> metrics dict for each task's test set.
@@ -80,19 +83,20 @@ class JointTrainer:
         task_names = list(task_sequence.keys())
         n_tasks = len(task_names)
 
-        # Build global mappings
-        entity_to_id, relation_to_id = build_global_mappings(task_sequence)
-
-        # Concatenate all training data
+        # Concatenate all training data (int arrays — very cheap)
+        _log_mem("joint: before concatenating train data")
         all_train = np.concatenate([
             task_sequence[name]["train"] for name in task_names
             if len(task_sequence[name]["train"]) > 0
         ], axis=0)
         logger.info(f"Joint training data: {len(all_train):,} triples "
                     f"from {n_tasks} tasks")
+        _log_mem("joint: after concatenation")
 
         # Create factories
         train_tf = make_triples_factory(all_train, entity_to_id, relation_to_id)
+        del all_train  # free the numpy copy
+        _log_mem("joint: after train TriplesFactory")
 
         test_factories = {}
         for name in task_names:
@@ -101,6 +105,7 @@ class JointTrainer:
                 test_factories[name] = make_triples_factory(
                     test_data, entity_to_id, relation_to_id
                 )
+        _log_mem("joint: after all test TriplesFactories")
 
         # Create and train model
         model = create_model(

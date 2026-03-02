@@ -1,7 +1,8 @@
 #!/bin/bash --login
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:v100:1
+#SBATCH --gpus-per-node=1
+#SBATCH --constraint=v100
 #SBATCH --partition=batch
 #SBATCH --cpus-per-gpu=2
 #SBATCH --mem=32G
@@ -13,7 +14,7 @@
 #   sbatch slurm/run_baseline.sh naive_sequential TransE
 #   sbatch slurm/run_baseline.sh ewc TransE
 
-source ~/miniconda3/bin/activate
+eval "$(~/miniconda3/bin/conda shell.bash hook)"
 conda activate mcgl
 
 mkdir -p results slurm/slurm_logs

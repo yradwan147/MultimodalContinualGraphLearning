@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import resource
 import sys
 import time
 from pathlib import Path
@@ -34,6 +35,18 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def log_memory(label: str) -> None:
+    """Log current RSS memory usage."""
+    rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # macOS returns bytes, Linux returns KB
+    if sys.platform == "darwin":
+        rss_mb = rss_mb / (1024 * 1024)
+    else:
+        rss_mb = rss_mb / 1024
+    logger.info(f"[MEMORY] {label}: {rss_mb:.0f} MB RSS")
+
 
 SEEDS = [42, 123, 456, 789, 1024]
 KGE_BASELINES = ["naive_sequential", "joint_training", "ewc", "experience_replay"]
@@ -99,10 +112,21 @@ def main() -> None:
     from src.baselines._base import load_task_sequence
     from src.evaluation.metrics import evaluate_continual_learning
 
-    # Load tasks once
-    task_seq = load_task_sequence(args.tasks_dir, args.task_names)
+    log_memory("before loading tasks")
+
+    # Load tasks once (returns int arrays + mappings)
+    task_seq, entity_to_id, relation_to_id = load_task_sequence(
+        args.tasks_dir, args.task_names
+    )
     task_names = list(task_seq.keys())
     logger.info(f"Loaded {len(task_names)} tasks: {task_names}")
+
+    # Log per-task sizes
+    for name, data in task_seq.items():
+        total = sum(len(v) for v in data.values())
+        logger.info(f"  {name}: {total:,} triples "
+                    f"(train={len(data['train']):,})")
+    log_memory("after loading tasks")
 
     for baseline_name in baselines:
         print(f"\n{'=' * 60}")
@@ -118,7 +142,13 @@ def main() -> None:
             logger.info(f"\n--- Seed {seed} ---")
             start = time.time()
 
-            R = _run_baseline(baseline_name, task_seq, args, seed)
+            log_memory(f"before {baseline_name} seed={seed}")
+            R = _run_baseline(
+                baseline_name, task_seq,
+                entity_to_id, relation_to_id,
+                args, seed,
+            )
+            log_memory(f"after {baseline_name} seed={seed}")
 
             elapsed = time.time() - start
             logger.info(f"Seed {seed} completed in {elapsed:.1f}s")
@@ -162,6 +192,8 @@ def main() -> None:
 def _run_baseline(
     name: str,
     task_seq: dict,
+    entity_to_id: dict[str, int],
+    relation_to_id: dict[str, int],
     args: argparse.Namespace,
     seed: int,
 ) -> "np.ndarray":
@@ -179,7 +211,7 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq)
+        return trainer.train(task_seq, entity_to_id, relation_to_id)
 
     elif name == "joint_training":
         from src.baselines.joint_training import JointTrainer
@@ -192,7 +224,7 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        result = trainer.train(task_seq)
+        result = trainer.train(task_seq, entity_to_id, relation_to_id)
         return result["results_matrix"]
 
     elif name == "ewc":
@@ -208,7 +240,7 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq)
+        return trainer.train(task_seq, entity_to_id, relation_to_id)
 
     elif name == "experience_replay":
         from src.baselines.experience_replay import ReplayTrainer
@@ -224,7 +256,7 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq)
+        return trainer.train(task_seq, entity_to_id, relation_to_id)
 
     else:
         raise ValueError(f"Unknown baseline: {name}")

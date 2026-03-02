@@ -1,5 +1,5 @@
 {
-  "ablation": "struct_only",
+  "ablation": "distillation",
   "config": {
     "num_entities": 24427,
     "num_relations": 4,
@@ -24,7 +24,7 @@
   "seeds": [
     42
   ],
-  "total_time_s": 34.694801330566406,
+  "total_time_s": 49.55591702461243,
   "results": [
     {
       "Average Performance (AP)": 1.0,
@@ -43,7 +43,7 @@
           1.0
         ]
       ],
-      "training_time_s": 34.671613931655884
+      "training_time_s": 49.547252893447876
     }
   ]
 }

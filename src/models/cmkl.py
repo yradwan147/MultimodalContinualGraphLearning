@@ -41,7 +41,6 @@ from src.continual.multimodal_replay import MultimodalMemoryBuffer
 from src.continual.distillation import KnowledgeDistillation
 from src.baselines._base import (
     load_task_sequence,
-    build_global_mappings,
     make_triples_factory,
     evaluate_link_prediction,
     get_device,

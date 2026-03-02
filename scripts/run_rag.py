@@ -44,6 +44,8 @@ def run_rag_evaluation(
     llm_name: str,
     embedding_model: str,
     seed: int,
+    entity_to_id: dict[str, int] | None = None,
+    relation_to_id: dict[str, int] | None = None,
 ) -> dict:
     """Run RAG evaluation across all tasks for one seed.
 
@@ -65,6 +67,10 @@ def run_rag_evaluation(
 
     np.random.seed(seed)
 
+    # Build reverse mappings for int ID -> string conversion
+    id_to_entity = {v: k for k, v in entity_to_id.items()} if entity_to_id else None
+    id_to_relation = {v: k for k, v in relation_to_id.items()} if relation_to_id else None
+
     # Initialize agent (new for each seed for clean evaluation)
     agent = BiomedicalRAGAgent(
         llm_name=llm_name,
@@ -81,6 +87,7 @@ def run_rag_evaluation(
     for task_name, task_data in task_seq.items():
         qa_per_task[task_name] = generate_kgqa_questions(
             task_data["test"], n=questions_per_task, seed=seed,
+            id_to_entity=id_to_entity, id_to_relation=id_to_relation,
         )
 
     for task_idx, task_name in enumerate(task_names):
@@ -89,9 +96,15 @@ def run_rag_evaluation(
 
         # Index training triples for this task
         if task_idx == 0:
-            agent.index_kg_snapshot(task_data["train"])
+            agent.index_kg_snapshot(
+                task_data["train"],
+                id_to_entity=id_to_entity, id_to_relation=id_to_relation,
+            )
         else:
-            agent.update_with_new_knowledge(task_data["train"])
+            agent.update_with_new_knowledge(
+                task_data["train"],
+                id_to_entity=id_to_entity, id_to_relation=id_to_relation,
+            )
 
         # Evaluate on all tasks seen so far
         for eval_idx in range(task_idx + 1):
@@ -140,12 +153,13 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from src.baselines._base import load_task_sequence, build_global_mappings
+    from src.baselines._base import load_task_sequence
 
     # Load tasks
-    task_seq = load_task_sequence(args.tasks_dir, args.task_names)
+    task_seq, entity_to_id, relation_to_id = load_task_sequence(
+        args.tasks_dir, args.task_names
+    )
     task_names = list(task_seq.keys())
-    entity_to_id, relation_to_id = build_global_mappings(task_seq)
 
     logger.info(f"Tasks: {task_names}")
     logger.info(f"Entities: {len(entity_to_id):,}, Relations: {len(relation_to_id)}")
@@ -168,6 +182,8 @@ def main() -> None:
             llm_name=args.llm,
             embedding_model=args.embedding_model,
             seed=seed,
+            entity_to_id=entity_to_id,
+            relation_to_id=relation_to_id,
         )
 
         elapsed = time.time() - start

@@ -7,7 +7,7 @@ Supports multiple exemplar selection strategies.
 Usage:
     from src.baselines.experience_replay import ReplayTrainer
     trainer = ReplayTrainer(model_name='TransE', buffer_size_per_task=500)
-    results_matrix = trainer.train(task_sequence)
+    results_matrix = trainer.train(task_sequence, entity_to_id, relation_to_id)
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ import numpy as np
 import torch
 
 from src.baselines._base import (
-    build_global_mappings,
     create_model,
     evaluate_link_prediction,
     get_device,
@@ -36,6 +35,8 @@ class ExperienceReplayKGE:
     Stores representative triples from completed tasks and provides
     them for mixed training during subsequent tasks.
 
+    Works with int64 mapped triples (column 1 = relation ID).
+
     Args:
         buffer_size_per_task: Max exemplars to store per task.
         selection_strategy: How to select exemplars - 'random' or
@@ -49,7 +50,7 @@ class ExperienceReplayKGE:
     ) -> None:
         self.buffer_size_per_task = buffer_size_per_task
         self.selection_strategy = selection_strategy
-        self.buffer: list[np.ndarray] = []  # List of triple arrays per task
+        self.buffer: list[np.ndarray] = []  # List of int64 triple arrays per task
 
     def select_exemplars(
         self,
@@ -59,7 +60,7 @@ class ExperienceReplayKGE:
         """Select representative triples for the memory buffer.
 
         Args:
-            triples: Array of shape (n, 3) with string triples.
+            triples: int64 array of shape (n, 3) with [head_id, rel_id, tail_id].
             task_id: Identifier for the current task.
 
         Returns:
@@ -108,7 +109,7 @@ class ExperienceReplayKGE:
         """Get all triples in the replay buffer.
 
         Returns:
-            Concatenated array of all buffered triples, or None if empty.
+            Concatenated int64 array of all buffered triples, or None if empty.
         """
         if not self.buffer:
             return None
@@ -158,12 +159,15 @@ class ReplayTrainer:
     def train(
         self,
         task_sequence: OrderedDict[str, dict],
+        entity_to_id: dict[str, int],
+        relation_to_id: dict[str, int],
     ) -> np.ndarray:
         """Train sequentially with replay and build results matrix.
 
         Args:
-            task_sequence: OrderedDict of {task_name: {'train': array,
-                'val': array, 'test': array}}.
+            task_sequence: OrderedDict of {task_name: {'train': int64_array, ...}}.
+            entity_to_id: Global entity → int mapping.
+            relation_to_id: Global relation → int mapping.
 
         Returns:
             results_matrix: R[i][j] = MRR on task j's test set
@@ -172,7 +176,6 @@ class ReplayTrainer:
         task_names = list(task_sequence.keys())
         n_tasks = len(task_names)
 
-        entity_to_id, relation_to_id = build_global_mappings(task_sequence)
         np.random.seed(self.seed)
 
         task_factories = {}

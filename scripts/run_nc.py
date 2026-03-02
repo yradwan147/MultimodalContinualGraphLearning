@@ -81,7 +81,7 @@ def run_nc_kge_baseline(
         Dict with results_matrix and metrics.
     """
     from src.baselines._base import (
-        build_global_mappings, make_triples_factory,
+        make_triples_factory,
         create_model, train_epoch, get_device,
     )
     from src.baselines.nc_baseline import NCBaseline
@@ -286,13 +286,14 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from src.baselines._base import load_task_sequence, build_global_mappings
+    from src.baselines._base import load_task_sequence
     from src.data.node_classification import build_nc_dataset, load_node_types
 
     # Load tasks
-    task_seq = load_task_sequence(args.tasks_dir, args.task_names)
+    task_seq, entity_to_id, relation_to_id = load_task_sequence(
+        args.tasks_dir, args.task_names
+    )
     task_names = list(task_seq.keys())
-    entity_to_id, relation_to_id = build_global_mappings(task_seq)
 
     # Load node types and build NC dataset
     node_types = load_node_types(kg_csv_path=args.kg_csv)

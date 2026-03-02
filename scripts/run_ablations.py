@@ -60,10 +60,11 @@ LAMBDA_VALUES = [0.1, 1.0, 5.0, 10.0, 50.0, 100.0]
 
 def get_base_config(args: argparse.Namespace) -> dict:
     """Build CMKL base config from args."""
-    from src.baselines._base import load_task_sequence, build_global_mappings
+    from src.baselines._base import load_task_sequence
 
-    task_seq = load_task_sequence(args.tasks_dir, args.task_names)
-    entity_to_id, relation_to_id = build_global_mappings(task_seq)
+    task_seq, entity_to_id, relation_to_id = load_task_sequence(
+        args.tasks_dir, args.task_names
+    )
 
     config = {
         "num_entities": len(entity_to_id),

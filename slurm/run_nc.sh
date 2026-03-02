@@ -1,7 +1,8 @@
 #!/bin/bash --login
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:v100:1
+#SBATCH --gpus-per-node=1
+#SBATCH --constraint=v100
 #SBATCH --partition=batch
 #SBATCH --cpus-per-gpu=2
 #SBATCH --mem=32G
@@ -12,7 +13,7 @@
 # Usage: sbatch slurm/run_nc.sh <method>
 #   Methods: naive_sequential, joint_training, ewc, experience_replay, cmkl
 
-source ~/miniconda3/bin/activate
+eval "$(~/miniconda3/bin/conda shell.bash hook)"
 conda activate mcgl
 
 mkdir -p results slurm/slurm_logs

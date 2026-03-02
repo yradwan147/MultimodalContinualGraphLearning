@@ -127,24 +127,32 @@ def build_nc_dataset(
     label_map = get_label_map()
     nc_tasks: OrderedDict[str, dict] = OrderedDict()
 
+    # Reverse mapping: int ID -> string entity name
+    id_to_entity = {v: k for k, v in entity_to_id.items()}
+
     for task_name, task_data in task_sequence.items():
-        # Collect all entities in this task
-        entities = set()
+        # Collect all entity int IDs in this task
+        entity_ids: set[int] = set()
         for split_data in task_data.values():
             if len(split_data) > 0:
-                entities.update(split_data[:, 0])  # heads
-                entities.update(split_data[:, 2])  # tails
+                entity_ids.update(split_data[:, 0].tolist())  # heads
+                entity_ids.update(split_data[:, 2].tolist())  # tails
 
-        # Map to IDs and labels
+        # Map int IDs to labels via string entity names
         node_ids = []
         labels = []
-        for entity in sorted(entities):
-            if entity not in entity_to_id:
+        for eid in sorted(entity_ids):
+            entity_name = id_to_entity.get(eid)
+            if entity_name is None:
                 continue
-            nt = node_types.get(entity)
+            nt = node_types.get(entity_name)
+            if nt is None:
+                # Benchmark uses zero-padded IDs, CSV uses raw — try stripped
+                stripped = entity_name.lstrip("0") or "0"
+                nt = node_types.get(stripped)
             if nt is None or nt not in label_map:
                 continue
-            node_ids.append(entity_to_id[entity])
+            node_ids.append(eid)
             labels.append(label_map[nt])
 
         if len(node_ids) < 10:

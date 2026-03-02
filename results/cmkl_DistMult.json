@@ -15,6 +15,9 @@
     "lambda_mol": 1.0,
     "replay_buffer_size": 100,
     "replay_weight": 0.5,
+    "use_distillation": false,
+    "distillation_temperature": 2.0,
+    "distillation_alpha": 0.5,
     "lr": 0.001,
     "num_epochs": 5,
     "batch_size": 512
@@ -28,23 +31,23 @@
   ],
   "results": [
     {
-      "Average Performance (AP)": 0.12396058669245669,
-      "Average Forgetting (AF)": 0.00048827308426966504,
-      "Backward Transfer (BWT)": -0.00048827308426966504,
+      "Average Performance (AP)": 1.0,
+      "Average Forgetting (AF)": 0.0,
+      "Backward Transfer (BWT)": 0.0,
       "Forward Transfer (FWT)": 0.0,
-      "Remembering (REM)": 0.9995117269157303,
+      "Remembering (REM)": 1.0,
       "seed": 42,
       "results_matrix": [
         [
-          0.05861713242700519,
+          1.0,
           0.0
         ],
         [
-          0.058128859342735525,
-          0.18979231404217786
+          1.0,
+          1.0
         ]
       ],
-      "training_time_s": 15.900971174240112
+      "training_time_s": 13.11366868019104
     }
   ]
 }

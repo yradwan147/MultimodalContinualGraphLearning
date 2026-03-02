@@ -143,7 +143,9 @@ class BiomedicalRAGAgent:
     def index_kg_snapshot(
         self,
         kg_triples: np.ndarray | list[tuple],
-        batch_size: int = 40000,
+        batch_size: int = 5000,
+        id_to_entity: dict[int, str] | None = None,
+        id_to_relation: dict[int, str] | None = None,
     ) -> int:
         """Index a KG snapshot into the vector store.
 
@@ -151,7 +153,10 @@ class BiomedicalRAGAgent:
 
         Args:
             kg_triples: Array/list of (head, relation, tail) triples.
+                Can be int IDs (requires id_to_entity/id_to_relation) or strings.
             batch_size: Number of documents to add per batch.
+            id_to_entity: Reverse mapping from int ID to entity name string.
+            id_to_relation: Reverse mapping from int ID to relation name string.
 
         Returns:
             Number of documents indexed.
@@ -164,12 +169,22 @@ class BiomedicalRAGAgent:
         metadatas = []
 
         for i, triple in enumerate(kg_triples):
-            h, r, t = triple[0], triple[1], triple[2]
+            h_raw, r_raw, t_raw = triple[0], triple[1], triple[2]
+            # Convert int IDs to strings if mappings provided
+            if id_to_entity is not None:
+                h = id_to_entity.get(int(h_raw), str(h_raw))
+                t = id_to_entity.get(int(t_raw), str(t_raw))
+            else:
+                h, t = str(h_raw), str(t_raw)
+            if id_to_relation is not None:
+                r = id_to_relation.get(int(r_raw), str(r_raw))
+            else:
+                r = str(r_raw)
             doc = _triple_to_sentence(h, r, t)
             doc_id = f"doc_{self._doc_count + i}"
             documents.append(doc)
             ids.append(doc_id)
-            metadatas.append({"head": str(h), "relation": str(r), "tail": str(t)})
+            metadatas.append({"head": h, "relation": r, "tail": t})
 
         # Add in batches to avoid ChromaDB limits
         total_added = 0
@@ -189,7 +204,9 @@ class BiomedicalRAGAgent:
     def update_with_new_knowledge(
         self,
         new_triples: np.ndarray | list[tuple],
-        batch_size: int = 40000,
+        batch_size: int = 5000,
+        id_to_entity: dict[int, str] | None = None,
+        id_to_relation: dict[int, str] | None = None,
     ) -> int:
         """Continual update: add new knowledge to vector store.
 
@@ -199,11 +216,16 @@ class BiomedicalRAGAgent:
         Args:
             new_triples: New triples to add.
             batch_size: Batch size for indexing.
+            id_to_entity: Reverse mapping from int ID to entity name string.
+            id_to_relation: Reverse mapping from int ID to relation name string.
 
         Returns:
             Number of new documents added.
         """
-        return self.index_kg_snapshot(new_triples, batch_size=batch_size)
+        return self.index_kg_snapshot(
+            new_triples, batch_size=batch_size,
+            id_to_entity=id_to_entity, id_to_relation=id_to_relation,
+        )
 
     def answer_question(
         self,

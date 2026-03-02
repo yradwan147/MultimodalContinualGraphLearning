@@ -91,6 +91,8 @@ def generate_kgqa_questions(
     triples: np.ndarray,
     n: int | None = None,
     seed: int = 42,
+    id_to_entity: dict[int, str] | None = None,
+    id_to_relation: dict[int, str] | None = None,
 ) -> list[dict[str, str]]:
     """Generate QA pairs from KG triples.
 
@@ -99,9 +101,12 @@ def generate_kgqa_questions(
     entity is the expected answer.
 
     Args:
-        triples: [N, 3] string array of (head, relation, tail).
+        triples: [N, 3] array of (head, relation, tail). Can be int IDs
+            (requires id_to_entity/id_to_relation) or strings.
         n: Number of questions to generate. None = all triples.
         seed: Random seed for sampling.
+        id_to_entity: Reverse mapping from int ID to entity name string.
+        id_to_relation: Reverse mapping from int ID to relation name string.
 
     Returns:
         List of dicts with 'question', 'answer', 'head', 'relation', 'tail'.
@@ -115,7 +120,21 @@ def generate_kgqa_questions(
         selected = triples
 
     questions = []
-    for head, relation, tail in selected:
+    for triple in selected:
+        h_raw, r_raw, t_raw = triple[0], triple[1], triple[2]
+
+        # Convert int IDs to strings if mappings provided
+        if id_to_entity is not None:
+            head = id_to_entity.get(int(h_raw), str(h_raw))
+            tail = id_to_entity.get(int(t_raw), str(t_raw))
+        else:
+            head, tail = str(h_raw), str(t_raw)
+
+        if id_to_relation is not None:
+            relation = id_to_relation.get(int(r_raw), str(r_raw))
+        else:
+            relation = str(r_raw)
+
         template = QUESTION_TEMPLATES.get(relation, FALLBACK_TEMPLATE)
         head_name = _clean_entity_name(head)
         question_text = template.format(head=head_name, relation=relation)
@@ -136,6 +155,8 @@ def generate_continual_kgqa_dataset(
     task_sequence: OrderedDict[str, dict[str, np.ndarray]],
     questions_per_task: int = 200,
     seed: int = 42,
+    id_to_entity: dict[int, str] | None = None,
+    id_to_relation: dict[int, str] | None = None,
 ) -> OrderedDict[str, list[dict[str, str]]]:
     """Generate per-task QA sets aligned with the CL task sequence.
 
@@ -146,6 +167,8 @@ def generate_continual_kgqa_dataset(
         task_sequence: OrderedDict of task_name -> {'train', 'val', 'test'}.
         questions_per_task: Number of QA pairs per task.
         seed: Random seed.
+        id_to_entity: Reverse mapping from int ID to entity name string.
+        id_to_relation: Reverse mapping from int ID to relation name string.
 
     Returns:
         OrderedDict mapping task_name -> list of QA dicts.
@@ -155,7 +178,10 @@ def generate_continual_kgqa_dataset(
     for task_name, task_data in task_sequence.items():
         test_triples = task_data["test"]
         n = min(questions_per_task, len(test_triples))
-        qa_pairs = generate_kgqa_questions(test_triples, n=n, seed=seed)
+        qa_pairs = generate_kgqa_questions(
+            test_triples, n=n, seed=seed,
+            id_to_entity=id_to_entity, id_to_relation=id_to_relation,
+        )
         qa_dataset[task_name] = qa_pairs
         logger.info(f"Generated {len(qa_pairs)} QA pairs for {task_name}")
 

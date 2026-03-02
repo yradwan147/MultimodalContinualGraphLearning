@@ -54,14 +54,15 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from src.baselines._base import load_task_sequence, build_global_mappings
+    from src.baselines._base import load_task_sequence
     from src.baselines.lkge import LKGEWrapper
     from src.evaluation.metrics import evaluate_continual_learning
 
     # Load tasks
-    task_seq = load_task_sequence(args.tasks_dir, args.task_names)
+    task_seq, entity_to_id, relation_to_id = load_task_sequence(
+        args.tasks_dir, args.task_names
+    )
     task_names = list(task_seq.keys())
-    entity_to_id, relation_to_id = build_global_mappings(task_seq)
 
     logger.info(f"Tasks: {task_names}")
     logger.info(f"Entities: {len(entity_to_id):,}, Relations: {len(relation_to_id)}")
@@ -112,6 +113,7 @@ def main() -> None:
             output_dir=seed_output,
             model=args.model,
             num_epochs=args.num_epochs,
+            seed=seed,
         )
         elapsed = time.time() - start
 

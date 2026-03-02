@@ -10,7 +10,7 @@ degradation on older tasks.
 Usage:
     from src.baselines.naive_sequential import NaiveSequentialTrainer
     trainer = NaiveSequentialTrainer(model_name='TransE')
-    results_matrix = trainer.train(task_sequence)
+    results_matrix = trainer.train(task_sequence, entity_to_id, relation_to_id)
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import numpy as np
 import torch
 
 from src.baselines._base import (
-    build_global_mappings,
+    _log_mem,
     create_model,
     evaluate_link_prediction,
     get_device,
@@ -35,9 +35,6 @@ logger = logging.getLogger(__name__)
 
 class NaiveSequentialTrainer:
     """Train KGE model sequentially without any CL mechanism.
-
-    Collects all entity and relation IDs upfront for consistent indexing,
-    then trains on each task using the previous model as initialization.
 
     Args:
         model_name: KGE model type - 'TransE', 'ComplEx', 'DistMult', or 'RotatE'.
@@ -71,12 +68,15 @@ class NaiveSequentialTrainer:
     def train(
         self,
         task_sequence: OrderedDict[str, dict],
+        entity_to_id: dict[str, int],
+        relation_to_id: dict[str, int],
     ) -> np.ndarray:
         """Train sequentially on all tasks and build results matrix.
 
         Args:
-            task_sequence: OrderedDict of {task_name: {'train': array,
-                'val': array, 'test': array}}.
+            task_sequence: OrderedDict of {task_name: {'train': int64_array, ...}}.
+            entity_to_id: Global entity → int mapping.
+            relation_to_id: Global relation → int mapping.
 
         Returns:
             results_matrix: R[i][j] = MRR on task j's test set
@@ -85,10 +85,8 @@ class NaiveSequentialTrainer:
         task_names = list(task_sequence.keys())
         n_tasks = len(task_names)
 
-        # Build global mappings
-        entity_to_id, relation_to_id = build_global_mappings(task_sequence)
-
-        # Create TriplesFactories for all tasks
+        # Create TriplesFactories from pre-mapped int arrays
+        _log_mem("before creating TriplesFactories")
         task_factories = {}
         for name, data in task_sequence.items():
             task_factories[name] = {
@@ -96,6 +94,7 @@ class NaiveSequentialTrainer:
                 for split, arr in data.items()
                 if len(arr) > 0
             }
+            _log_mem(f"after TriplesFactory for {name}")
 
         # Initialize model
         first_tf = task_factories[task_names[0]]["train"]

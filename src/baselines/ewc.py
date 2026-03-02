@@ -12,7 +12,7 @@ Reference: EWC with lambda=10 reduced forgetting from 12.62% to 6.85% on FB15k-2
 Usage:
     from src.baselines.ewc import EWCTrainer
     trainer = EWCTrainer(model_name='TransE', lambda_ewc=10.0)
-    results_matrix = trainer.train(task_sequence)
+    results_matrix = trainer.train(task_sequence, entity_to_id, relation_to_id)
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import numpy as np
 import torch
 
 from src.baselines._base import (
-    build_global_mappings,
     create_model,
     evaluate_link_prediction,
     get_device,
@@ -179,12 +178,15 @@ class EWCTrainer:
     def train(
         self,
         task_sequence: OrderedDict[str, dict],
+        entity_to_id: dict[str, int],
+        relation_to_id: dict[str, int],
     ) -> np.ndarray:
         """Train sequentially with EWC and build results matrix.
 
         Args:
-            task_sequence: OrderedDict of {task_name: {'train': array,
-                'val': array, 'test': array}}.
+            task_sequence: OrderedDict of {task_name: {'train': int64_array, ...}}.
+            entity_to_id: Global entity → int mapping.
+            relation_to_id: Global relation → int mapping.
 
         Returns:
             results_matrix: R[i][j] = MRR on task j's test set
@@ -192,8 +194,6 @@ class EWCTrainer:
         """
         task_names = list(task_sequence.keys())
         n_tasks = len(task_names)
-
-        entity_to_id, relation_to_id = build_global_mappings(task_sequence)
 
         task_factories = {}
         for name, data in task_sequence.items():

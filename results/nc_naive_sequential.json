@@ -1,0 +1,39 @@
+{
+  "method": "naive_sequential",
+  "task": "node_classification",
+  "task_names": [
+    "task_1_disease_related",
+    "task_3_phenotype_related"
+  ],
+  "seeds": [
+    42
+  ],
+  "results": [
+    {
+      "method": "naive_sequential",
+      "results_matrix": [
+        [
+          0.07869065683936702,
+          0.0
+        ],
+        [
+          0.07869065683936702,
+          0.06899173635937614
+        ]
+      ],
+      "task_names": [
+        "task_1_disease_related",
+        "task_3_phenotype_related"
+      ],
+      "cl_metrics": {
+        "Average Performance (AP)": 0.07384119659937158,
+        "Average Forgetting (AF)": 0.0,
+        "Backward Transfer (BWT)": 0.0,
+        "Forward Transfer (FWT)": 0.0,
+        "Remembering (REM)": 1.0
+      },
+      "seed": 42,
+      "training_time_s": 7.482916831970215
+    }
+  ]
+}
