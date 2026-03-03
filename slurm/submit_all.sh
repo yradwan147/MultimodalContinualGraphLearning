@@ -8,6 +8,15 @@
 set -e
 mkdir -p slurm/slurm_logs
 
+# Ensure LKGE is cloned and patched
+if [ ! -d "external/LKGE" ]; then
+    echo "Cloning LKGE..."
+    git clone https://github.com/nju-websoft/LKGE.git external/LKGE
+fi
+echo "Applying LKGE patches..."
+cp patches/LKGE_src/config.py external/LKGE/src/config.py
+cp patches/LKGE_src/parse_args.py external/LKGE/src/parse_args.py
+
 SEEDS="42 123 456 789 1024"
 COUNT=0
 
