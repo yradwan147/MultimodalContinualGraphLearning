@@ -400,3 +400,96 @@ def evaluate_multihop_rag(
         "multihop_F1": float(np.mean(f1_scores)) if f1_scores else 0.0,
         "num_questions": len(questions),
     }
+
+
+# ---------------------------------------------------------------------------
+# Score function factories for model-specific multi-hop evaluation
+# ---------------------------------------------------------------------------
+
+def make_pykeen_score_fn(
+    model: "torch.nn.Module",
+    num_entities: int,
+    device: str = "cpu",
+) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    """Create a score function from a PyKEEN model.
+
+    Returns a callable that takes (head_ids [B], rel_ids [B]) and returns
+    scores [B, num_entities] for all tail entities.
+
+    Args:
+        model: Trained PyKEEN model.
+        num_entities: Total number of entities.
+        device: Device for computation.
+
+    Returns:
+        Score function compatible with evaluate_multihop().
+    """
+    import torch
+
+    model.eval()
+    all_tails = torch.arange(num_entities, device=device)
+
+    def score_fn(head_ids: np.ndarray, rel_ids: np.ndarray) -> np.ndarray:
+        B = len(head_ids)
+        heads = torch.tensor(head_ids, dtype=torch.long, device=device)
+        rels = torch.tensor(rel_ids, dtype=torch.long, device=device)
+
+        scores = np.zeros((B, num_entities), dtype=np.float32)
+        with torch.no_grad():
+            for i in range(B):
+                # Build triples: (head_i, rel_i, all_tails)
+                h = heads[i].expand(num_entities)
+                r = rels[i].expand(num_entities)
+                triples = torch.stack([h, r, all_tails], dim=1)
+                s = model.score_hrt(triples).cpu().numpy().flatten()
+                scores[i] = s
+
+        return scores
+
+    return score_fn
+
+
+def make_cmkl_score_fn(
+    cmkl_model: "torch.nn.Module",
+    node_embeddings: "torch.Tensor",
+    device: str = "cpu",
+) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    """Create a score function from a CMKL model.
+
+    Returns a callable that takes (head_ids [B], rel_ids [B]) and returns
+    scores [B, num_entities] for all tail entities.
+
+    Args:
+        cmkl_model: Trained CMKL model.
+        node_embeddings: Fused node embeddings [num_entities, dim].
+        device: Device for computation.
+
+    Returns:
+        Score function compatible with evaluate_multihop().
+    """
+    import torch
+
+    cmkl_model.eval()
+    num_entities = node_embeddings.shape[0]
+    emb = node_embeddings.to(device)
+
+    def score_fn(head_ids: np.ndarray, rel_ids: np.ndarray) -> np.ndarray:
+        B = len(head_ids)
+        heads = torch.tensor(head_ids, dtype=torch.long, device=device)
+        rels = torch.tensor(rel_ids, dtype=torch.long, device=device)
+        all_tails = torch.arange(num_entities, device=device)
+
+        scores = np.zeros((B, num_entities), dtype=np.float32)
+        with torch.no_grad():
+            for i in range(B):
+                s = cmkl_model.score_triples(
+                    emb,
+                    heads[i].expand(num_entities),
+                    rels[i].expand(num_entities),
+                    all_tails,
+                ).cpu().numpy().flatten()
+                scores[i] = s
+
+        return scores
+
+    return score_fn

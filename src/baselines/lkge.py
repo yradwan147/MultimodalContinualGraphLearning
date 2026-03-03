@@ -117,6 +117,8 @@ class LKGEWrapper:
         num_epochs: int = 100,
         snapshot_num: int | None = None,
         seed: int = 42,
+        emb_dim: int = 200,
+        batch_size: int = 2048,
     ) -> str:
         """Generate the command to run LKGE.
 
@@ -127,6 +129,8 @@ class LKGEWrapper:
             num_epochs: Training epochs.
             snapshot_num: Number of snapshots. Auto-detected if None.
             seed: Random seed.
+            emb_dim: Embedding dimension (default 200; reduce for large KGs).
+            batch_size: Training batch size.
 
         Returns:
             Command string to execute.
@@ -158,6 +162,8 @@ class LKGEWrapper:
             f"-lifelong_name {lifelong_name} "
             f"-embedding_model {model} "
             f"-epoch_num {num_epochs} "
+            f"-emb_dim {emb_dim} "
+            f"-batch_size {batch_size} "
             f"-seed {seed}"
         )
         return cmd
@@ -171,6 +177,8 @@ class LKGEWrapper:
         num_epochs: int = 100,
         timeout: int = 86400,
         seed: int = 42,
+        emb_dim: int = 200,
+        batch_size: int = 2048,
     ) -> dict:
         """Run LKGE as a subprocess and parse the output.
 
@@ -182,12 +190,15 @@ class LKGEWrapper:
             num_epochs: Training epochs.
             timeout: Max runtime in seconds (default 24h).
             seed: Random seed.
+            emb_dim: Embedding dimension.
+            batch_size: Training batch size.
 
         Returns:
             Dict with parsed metrics per snapshot.
         """
         cmd = self.get_run_command(
-            dataset_dir, lifelong_name, model, num_epochs, seed=seed
+            dataset_dir, lifelong_name, model, num_epochs,
+            seed=seed, emb_dim=emb_dim, batch_size=batch_size,
         )
         logger.info(f"Running LKGE: {cmd}")
 
@@ -211,7 +222,7 @@ class LKGEWrapper:
 
             if result.returncode != 0:
                 logger.warning(f"LKGE non-zero exit: {result.returncode}")
-                logger.warning(f"stderr: {result.stderr[:500]}")
+                logger.warning(f"stderr (last 2000 chars): {result.stderr[-2000:]}")
 
         except subprocess.TimeoutExpired:
             logger.error(f"LKGE timed out after {timeout}s")
@@ -257,13 +268,22 @@ class LKGEWrapper:
     def _parse_log_content(self, content: str) -> dict:
         """Parse LKGE log text to extract per-snapshot metrics.
 
-        LKGE outputs metrics in patterns like:
-            Snapshot 0 - MRR: 0.1234 - Hits@1: 0.0567 - Hits@3: 0.1234 - Hits@10: 0.2345
-        or:
-            [Snapshot 0] MRR=0.1234, Hits@1=0.0567, Hits@3=0.1234, Hits@10=0.2345
-        or table format:
-            snapshot | MRR   | Hits@1 | Hits@3 | Hits@10
-            0        | 0.123 | 0.056  | 0.123  | 0.234
+        LKGE outputs PrettyTable format with per-snapshot test tables:
+            +-----------+------+--------+--------+--------+---------+
+            | Snapshot:0| MRR  | Hits@1 | Hits@3 | Hits@5 | Hits@10 |
+            +-----------+------+--------+--------+--------+---------+
+            |     0     | 0.45 | 0.23   | 0.34   | 0.40   | 0.52    |
+            +-----------+------+--------+--------+--------+---------+
+
+        And a report table:
+            +----------+------+-----------+--------------+--------------+---------------+
+            | Snapshot | Time | Whole_MRR | Whole_Hits@1 | Whole_Hits@3 | Whole_Hits@10 |
+            +----------+------+-----------+--------------+--------------+---------------+
+            |    0     | 12.3 |   0.456   |    0.234     |    0.345     |    0.523      |
+            +----------+------+-----------+--------------+--------------+---------------+
+
+        And training logs:
+            Snapshot:X\tEpoch:X\tLoss:X\tMRR:XX.XX\tHits@10:XX.XX\tBest:XX.XX
 
         Args:
             content: Raw log text.
@@ -271,77 +291,115 @@ class LKGEWrapper:
         Returns:
             Dict with per_snapshot metrics and results_matrix.
         """
+        # results_matrix[train_snap][test_snap] = MRR
+        matrix_entries: dict[tuple[int, int], float] = {}
+        # Per-snapshot final metrics (from report table)
         per_snapshot: dict[int, dict[str, float]] = {}
 
-        # Pattern 1: "Snapshot X - MRR: Y" or "Snapshot X: MRR: Y"
-        snap_pattern = re.compile(
-            r"[Ss]napshot\s+(\d+)\s*[-:]\s*"
-            r"MRR[:\s=]+([0-9.]+).*?"
-            r"Hits@1[:\s=]+([0-9.]+).*?"
-            r"Hits@3[:\s=]+([0-9.]+).*?"
-            r"Hits@10[:\s=]+([0-9.]+)",
-            re.IGNORECASE,
+        lines = content.split("\n")
+
+        # --- Parse per-snapshot test tables ---
+        # Header pattern: "Snapshot:X" in the table header row
+        header_pat = re.compile(r"Snapshot:(\d+)")
+        # Data row: | test_id | mrr | hits1 | hits3 | hits5 | hits10 |
+        data_row_pat = re.compile(
+            r"\|\s*(\d+)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|"
+            r"\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|"
         )
-        for m in snap_pattern.finditer(content):
-            snap_id = int(m.group(1))
-            per_snapshot[snap_id] = {
-                "MRR": float(m.group(2)),
-                "Hits@1": float(m.group(3)),
-                "Hits@3": float(m.group(4)),
-                "Hits@10": float(m.group(5)),
-            }
 
-        # Pattern 2: "test on snapshot X" followed by individual metric lines
-        if not per_snapshot:
-            test_snap = re.compile(
-                r"[Tt]est(?:ing)?\s+(?:on\s+)?[Ss]napshot\s+(\d+)", re.IGNORECASE
+        current_train_snap = None
+        for line in lines:
+            # Check for table header identifying the training snapshot
+            hm = header_pat.search(line)
+            if hm and "field_names" not in line:
+                # Could be header row or just a mention — check it's in a table
+                if "|" in line or "Snapshot:" in line:
+                    current_train_snap = int(hm.group(1))
+                continue
+
+            # Check for data rows
+            dm = data_row_pat.search(line)
+            if dm and current_train_snap is not None:
+                test_snap = int(dm.group(1))
+                mrr = float(dm.group(2))
+                matrix_entries[(current_train_snap, test_snap)] = mrr
+
+            # Reset on separator lines between tables
+            if line.strip().startswith("+") and line.count("+") >= 3:
+                pass  # PrettyTable border — don't reset
+
+        # --- Parse report table (whole metrics per snapshot) ---
+        report_row_pat = re.compile(
+            r"\|\s*(\d+)\s*\|\s*[0-9.]+\s*\|\s*([0-9.]+)\s*\|"
+            r"\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|"
+        )
+        in_report = False
+        for line in lines:
+            if "Whole_MRR" in line:
+                in_report = True
+                continue
+            if in_report:
+                rm = report_row_pat.search(line)
+                if rm:
+                    snap_id = int(rm.group(1))
+                    per_snapshot[snap_id] = {
+                        "Whole_MRR": float(rm.group(2)),
+                        "Whole_Hits@1": float(rm.group(3)),
+                        "Whole_Hits@3": float(rm.group(4)),
+                        "Whole_Hits@10": float(rm.group(5)),
+                    }
+                elif line.strip().startswith("+"):
+                    pass  # Table border
+                elif line.strip() and not line.strip().startswith("|"):
+                    in_report = False
+
+        # --- Parse training log lines as fallback ---
+        # Format: Snapshot:X\tEpoch:X\tLoss:X\tMRR:XX.XX\tHits@10:XX.XX\tBest:XX.XX
+        train_log_pat = re.compile(
+            r"Snapshot:(\d+)\s+Epoch:(\d+)\s+Loss:([0-9.]+)\s+"
+            r"MRR:([0-9.]+)\s+Hits@10:([0-9.]+)"
+        )
+        training_logs = []
+        for line in lines:
+            tm = train_log_pat.search(line)
+            if tm:
+                training_logs.append({
+                    "snapshot": int(tm.group(1)),
+                    "epoch": int(tm.group(2)),
+                    "loss": float(tm.group(3)),
+                    "mrr_pct": float(tm.group(4)),
+                    "hits10_pct": float(tm.group(5)),
+                })
+
+        # --- Parse forward/backward transfer ---
+        transfer = {}
+        ft_pat = re.compile(
+            r"Forward transfer:\s*([0-9.eE+-]+)\s+"
+            r"Backward transfer:\s*([0-9.eE+-]+)"
+        )
+        fm = ft_pat.search(content)
+        if fm:
+            transfer["forward_transfer"] = float(fm.group(1))
+            transfer["backward_transfer"] = float(fm.group(2))
+
+        # --- Build results matrix ---
+        if matrix_entries:
+            max_snap = max(
+                max(k[0] for k in matrix_entries),
+                max(k[1] for k in matrix_entries),
             )
-            mrr_pat = re.compile(r"MRR[:\s=]+([0-9.]+)", re.IGNORECASE)
-            h1_pat = re.compile(r"Hits@1[:\s=]+([0-9.]+)", re.IGNORECASE)
-            h3_pat = re.compile(r"Hits@3[:\s=]+([0-9.]+)", re.IGNORECASE)
-            h10_pat = re.compile(r"Hits@10[:\s=]+([0-9.]+)", re.IGNORECASE)
-
-            lines = content.split("\n")
-            current_snap = None
-            for line in lines:
-                snap_m = test_snap.search(line)
-                if snap_m:
-                    current_snap = int(snap_m.group(1))
-                    per_snapshot[current_snap] = {}
-                    continue
-                if current_snap is not None:
-                    for pat, key in [(mrr_pat, "MRR"), (h1_pat, "Hits@1"),
-                                     (h3_pat, "Hits@3"), (h10_pat, "Hits@10")]:
-                        m = pat.search(line)
-                        if m:
-                            per_snapshot[current_snap][key] = float(m.group(1))
-
-        # Pattern 3: Tabular format (pipe-separated)
-        if not per_snapshot:
-            table_row = re.compile(
-                r"^\s*(\d+)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|\s*"
-                r"([0-9.]+)\s*\|\s*([0-9.]+)",
-                re.MULTILINE,
-            )
-            for m in table_row.finditer(content):
-                snap_id = int(m.group(1))
-                per_snapshot[snap_id] = {
-                    "MRR": float(m.group(2)),
-                    "Hits@1": float(m.group(3)),
-                    "Hits@3": float(m.group(4)),
-                    "Hits@10": float(m.group(5)),
-                }
-
-        # Build results matrix using MRR as the primary metric
-        # R[i][j] = MRR on snapshot j after training through snapshot i
-        # LKGE typically reports final performance on each snapshot
-        if per_snapshot:
+            n = max_snap + 1
+            results_matrix = np.zeros((n, n))
+            for (train_s, test_s), mrr in matrix_entries.items():
+                results_matrix[train_s, test_s] = mrr
+            results_matrix = results_matrix.tolist()
+        elif per_snapshot:
+            # Fallback: use report table (whole metrics)
             n = max(per_snapshot.keys()) + 1
             results_matrix = np.zeros((n, n))
             for snap_id, metrics in per_snapshot.items():
-                # LKGE evaluates on all snapshots after training on each
-                # The parsed metrics represent final evaluation
-                results_matrix[n - 1, snap_id] = metrics.get("MRR", 0.0)
+                # Report table only has final row — fill last row
+                results_matrix[n - 1, snap_id] = metrics.get("Whole_MRR", 0.0)
             results_matrix = results_matrix.tolist()
         else:
             results_matrix = []
@@ -350,6 +408,11 @@ class LKGEWrapper:
             "per_snapshot": {
                 str(k): v for k, v in sorted(per_snapshot.items())
             },
+            "matrix_entries": {
+                f"{k[0]}_{k[1]}": v for k, v in sorted(matrix_entries.items())
+            },
             "results_matrix": results_matrix,
-            "raw_log": content[:5000],
+            "transfer": transfer,
+            "num_training_logs": len(training_logs),
+            "raw_log": content[:10000],
         }

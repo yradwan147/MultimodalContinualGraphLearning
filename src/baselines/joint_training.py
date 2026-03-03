@@ -125,6 +125,14 @@ class JointTrainer:
             if (epoch + 1) % max(1, self.num_epochs // 5) == 0:
                 logger.info(f"  Epoch {epoch + 1}/{self.num_epochs}, loss={loss:.4f}")
 
+        # Build filter triples: all known triples from all tasks
+        all_known = torch.cat([
+            torch.cat([
+                tf.mapped_triples for tf in test_factories.values()
+            ]),
+            train_tf.mapped_triples,
+        ])
+
         # Evaluate on each task's test set
         per_task = {}
         R = np.zeros((n_tasks, n_tasks))
@@ -134,6 +142,7 @@ class JointTrainer:
                 metrics = evaluate_link_prediction(
                     model, test_factories[name],
                     device=self.device, batch_size=self.batch_size,
+                    all_known_mapped_triples=all_known,
                 )
                 per_task[name] = metrics
                 logger.info(f"  {name}: MRR={metrics['MRR']:.4f}, "

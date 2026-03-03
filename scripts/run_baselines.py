@@ -84,6 +84,8 @@ def main() -> None:
         help="Random seeds (default: [42]; use --seeds 42 123 456 789 1024 for full)",
     )
     parser.add_argument("--output-dir", default="results", help="Output directory")
+    parser.add_argument("--output-suffix", default="",
+                        help="Suffix for output filename (e.g. _seed42)")
 
     # EWC-specific
     parser.add_argument("--lambda-ewc", type=float, default=10.0)
@@ -136,6 +138,8 @@ def main() -> None:
                     f"(train={len(data['train']):,})")
     log_memory("after loading tasks")
 
+    total_start = time.time()
+
     for baseline_name in baselines:
         print(f"\n{'=' * 60}")
         print(f"Baseline: {baseline_name}")
@@ -143,6 +147,8 @@ def main() -> None:
               f"epochs={args.num_epochs}, lr={args.lr}")
         print(f"Seeds: {args.seeds}")
         print(f"{'=' * 60}")
+        print(f"[STARTED] method={baseline_name} seeds={args.seeds} "
+              f"tasks={len(task_names)} epochs={args.num_epochs}")
 
         all_seed_results = []
 
@@ -151,7 +157,7 @@ def main() -> None:
             start = time.time()
 
             log_memory(f"before {baseline_name} seed={seed}")
-            R = _run_baseline(
+            R, trained_model = _run_baseline(
                 baseline_name, task_seq,
                 entity_to_id, relation_to_id,
                 args, seed,
@@ -172,13 +178,37 @@ def main() -> None:
                 if isinstance(val, float):
                     logger.info(f"  {name}: {val:.4f}")
 
+            seed_elapsed = time.time() - total_start
+            print(f"[PROGRESS] method={baseline_name} seed={seed} "
+                  f"AP={cl_metrics['Average Performance (AP)']:.4f} "
+                  f"AF={cl_metrics['Average Forgetting (AF)']:.4f} "
+                  f"elapsed={seed_elapsed:.0f}s")
+
+            # Save after each seed so partial results survive failures
+            result_path = output_dir / f"{baseline_name}_{args.model}{args.output_suffix}.json"
+            with open(result_path, "w") as f:
+                json.dump({
+                    "baseline": baseline_name,
+                    "model": args.model,
+                    "embedding_dim": args.embedding_dim,
+                    "num_epochs": args.num_epochs,
+                    "lr": args.lr,
+                    "task_names": task_names,
+                    "seeds": args.seeds,
+                    "results": all_seed_results,
+                }, f, indent=2)
+            logger.info(f"Intermediate save: {result_path} ({len(all_seed_results)}/{len(args.seeds)} seeds)")
+
         # Multi-hop evaluation (if requested)
         multihop_results = None
         if args.eval_multihop:
-            from src.evaluation.multihop import extract_all_path_types
+            from src.evaluation.multihop import (
+                extract_all_path_types,
+                evaluate_multihop,
+                make_pykeen_score_fn,
+            )
 
             logger.info("Running multi-hop path evaluation...")
-            # Collect all training triples across tasks
             all_train = np.concatenate(
                 [data["train"] for data in task_seq.values()], axis=0,
             )
@@ -187,11 +217,28 @@ def main() -> None:
             )
             multihop_results = {}
             for desc, paths in all_paths.items():
+                if not paths:
+                    continue
                 multihop_results[desc] = {"num_paths": len(paths)}
                 logger.info(f"  {desc}: {len(paths):,} paths extracted")
 
+            # Score with the last trained model (if available)
+            if trained_model is not None:
+                score_fn = make_pykeen_score_fn(
+                    trained_model, len(entity_to_id), device=args.device,
+                )
+                for desc, paths in all_paths.items():
+                    if not paths:
+                        continue
+                    mh_metrics = evaluate_multihop(
+                        score_fn, paths, len(entity_to_id),
+                    )
+                    multihop_results[desc].update(mh_metrics)
+                    logger.info(f"  {desc}: MRR={mh_metrics['multihop_MRR']:.4f}, "
+                                f"H@10={mh_metrics['multihop_Hits@10']:.4f}")
+
         # Save results
-        result_path = output_dir / f"{baseline_name}_{args.model}.json"
+        result_path = output_dir / f"{baseline_name}_{args.model}{args.output_suffix}.json"
         output_data = {
             "baseline": baseline_name,
             "model": args.model,
@@ -225,8 +272,13 @@ def _run_baseline(
     relation_to_id: dict[str, int],
     args: argparse.Namespace,
     seed: int,
-) -> "np.ndarray":
-    """Run a single baseline with a single seed. Returns results matrix."""
+) -> tuple:
+    """Run a single baseline with a single seed.
+
+    Returns:
+        Tuple of (results_matrix, trained_model) where trained_model is the
+        PyKEEN model for multi-hop evaluation.
+    """
     if name == "naive_sequential":
         from src.baselines.naive_sequential import NaiveSequentialTrainer
         trainer = NaiveSequentialTrainer(
@@ -238,7 +290,8 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq, entity_to_id, relation_to_id)
+        R = trainer.train(task_seq, entity_to_id, relation_to_id)
+        return R, trainer.model
 
     elif name == "joint_training":
         from src.baselines.joint_training import JointTrainer
@@ -252,7 +305,7 @@ def _run_baseline(
             seed=seed,
         )
         result = trainer.train(task_seq, entity_to_id, relation_to_id)
-        return result["results_matrix"]
+        return result["results_matrix"], None
 
     elif name == "ewc":
         from src.baselines.ewc import EWCTrainer
@@ -267,7 +320,7 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq, entity_to_id, relation_to_id)
+        return trainer.train(task_seq, entity_to_id, relation_to_id), None
 
     elif name == "experience_replay":
         from src.baselines.experience_replay import ReplayTrainer
@@ -283,11 +336,16 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq, entity_to_id, relation_to_id)
+        return trainer.train(task_seq, entity_to_id, relation_to_id), None
 
     else:
         raise ValueError(f"Unknown baseline: {name}")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("[SUCCESS] run_baselines completed")
+    except Exception as e:
+        print(f"[FAILED] run_baselines error={str(e)[:200]}")
+        raise

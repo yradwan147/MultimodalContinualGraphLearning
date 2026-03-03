@@ -1015,3 +1015,87 @@ All multi-hop module functions tested successfully:
 - Re-run IBEX experiments with `--eval-multihop` to collect multi-hop results
 - Write Paper A and Paper B LaTeX drafts (Phases 6 & 7)
 - Create `scripts/run_multihop_eval.py` standalone script for post-hoc evaluation
+
+---
+
+## 2026-03-03 Session - Phase 5.7: Fix All Bugs + Optimize SLURM
+
+Executed all 9 priorities from `.claude-plans/phase5.7-fix-bugs-optimize-slurm.md`.
+
+### P1: Fix CMKL _map_triples Bug (MRR=1.0)
+- `src/models/cmkl.py`: `_map_triples()` was doing `entity_to_id.get(int64_value, 0)` — string keys vs int64 input caused ALL triples to collapse to (0,0,0). Fixed to identity: `return np.asarray(triples, dtype=np.int64)`.
+
+### P2: Fix KGE Filtered Evaluation
+- `src/baselines/_base.py`: Added `all_known_mapped_triples` parameter to `evaluate_link_prediction()` for filtered ranking.
+- `src/baselines/naive_sequential.py`, `ewc.py`, `experience_replay.py`, `joint_training.py`: All now build filter triples from all tasks seen so far and pass to evaluation.
+- `src/models/cmkl.py`: Added filtered ranking to `_evaluate_mrr()` with `hr_to_tails` masking.
+
+### P3: Fix NC Identical Results
+- `scripts/run_nc.py`: Previously used plain `train_epoch()` for ALL methods. Now imports and uses:
+  - `EWC_KGE` for EWC method (adds EWC penalty to loss)
+  - `ExperienceReplayKGE` for replay method (mixes buffer with current task)
+  - Calls `ewc.compute_fisher()` and `replay.add_task()` after each task.
+
+### P4: Fix LKGE Config Override + Parsing + Memory
+- `external/LKGE/src/config.py`: Removed `args.emb_dim = 200` hard-code that silently overrode CLI args. This was the root cause of all LKGE OOM failures.
+- `external/LKGE/src/parse_args.py`: Added `type=int` and `type=float` to all numeric argparse arguments.
+- `src/baselines/lkge.py`: Rewrote `_parse_log_content()` to match actual PrettyTable output format. Fixed results matrix to populate R[train_snap][test_snap] correctly.
+- `scripts/run_lkge.py`: Changed default emb_dim to 50, added `--skip-base-task` flag.
+
+### P5: Fix RAG OOM + F1=0.0
+- `src/baselines/rag_agent.py`: Root cause of F1=0.0 found — retrieved answers not cleaned like gold answers. Fixed `_extract_from_retrieval()` to use `_clean_entity_name()`.
+- `slurm/run_rag.sh`: Bumped to 128G RAM, added `--no-llm` for retrieval-only mode.
+
+### P6: SLURM Separate Jobs (1 Seed Per Job)
+- All SLURM scripts rewritten to accept seed as parameter: `run_baseline.sh`, `run_cmkl.sh`, `run_lkge.sh`, `run_rag.sh`, `run_nc.sh`.
+- All Python scripts: Added `--output-suffix` arg for per-seed filenames.
+- Created `slurm/submit_all.sh`: Submits 60 jobs (5 seeds x 12 methods).
+- Created `scripts/merge_seed_results.py`: Merges per-seed JSON files after completion.
+
+### P7: Add Progress Reporting Markers
+- All 5 Python run scripts now print `[STARTED]`, `[PROGRESS]`, `[SUCCESS]`, `[FAILED]` markers.
+- Main functions wrapped in try/except for `[FAILED]` reporting.
+
+### P8: Create Smoke Tests
+- Created `tests/test_smoke.py` with 11 test cases covering all critical fixes.
+- Tests: _map_triples identity, filtered eval param, NC method imports, LKGE config, LKGE parsing, RAG entity cleaning, progress markers, output suffix.
+
+### P9: Multi-hop Model Scoring Integration
+- `src/evaluation/multihop.py`: Added `make_pykeen_score_fn()` and `make_cmkl_score_fn()`.
+- `scripts/run_baselines.py`: Now calls `evaluate_multihop()` with actual model scoring.
+- `scripts/run_cmkl.py`: Now calls `evaluate_multihop()` with CMKL fused embeddings.
+
+### Files Modified
+| File | Action | Notes |
+|------|--------|-------|
+| `src/models/cmkl.py` | Modified | _map_triples identity + filtered _evaluate_mrr |
+| `src/baselines/_base.py` | Modified | all_known_mapped_triples param |
+| `src/baselines/naive_sequential.py` | Modified | Filter triples |
+| `src/baselines/ewc.py` | Modified | Filter triples |
+| `src/baselines/experience_replay.py` | Modified | Filter triples |
+| `src/baselines/joint_training.py` | Modified | Filter triples |
+| `src/baselines/rag_agent.py` | Modified | _clean_entity_name for answers |
+| `src/baselines/lkge.py` | Modified | Rewritten PrettyTable parsing |
+| `src/evaluation/multihop.py` | Modified | Score fn factories |
+| `scripts/run_baselines.py` | Modified | Output suffix, progress, multihop scoring |
+| `scripts/run_cmkl.py` | Modified | Output suffix, progress, multihop scoring |
+| `scripts/run_lkge.py` | Modified | emb_dim=50 default, skip-base-task, progress |
+| `scripts/run_rag.py` | Modified | Output suffix, progress |
+| `scripts/run_nc.py` | Modified | Method-specific CL training, progress |
+| `external/LKGE/src/config.py` | Modified | Removed emb_dim override |
+| `external/LKGE/src/parse_args.py` | Modified | type=int for args |
+| `slurm/run_baseline.sh` | Rewritten | Per-seed, 30h, 48G |
+| `slurm/run_cmkl.sh` | Rewritten | Per-seed, 30h, 48G |
+| `slurm/run_lkge.sh` | Rewritten | Per-seed, 48h, 128G, skip-base |
+| `slurm/run_rag.sh` | Rewritten | Per-seed, 24h, 128G, no-llm |
+| `slurm/run_nc.sh` | Rewritten | Per-seed, 30h, 32G |
+| `slurm/submit_all.sh` | Rewritten | 60 jobs master script |
+| `scripts/merge_seed_results.py` | Created | Merge per-seed JSONs |
+| `tests/test_smoke.py` | Created | 11 smoke tests |
+| `tests/__init__.py` | Created | Package init |
+
+### Next Steps
+- Run `python -m pytest tests/test_smoke.py -v` locally to verify all fixes
+- Run `bash slurm/submit_all.sh` on IBEX
+- Monitor with: `watch -n 30 'grep -h "\[PROGRESS\]\|\[SUCCESS\]\|\[FAILED\]" slurm/slurm_logs/*.out | sort | tail -30'`
+- After completion: `python scripts/merge_seed_results.py --input-dir results`

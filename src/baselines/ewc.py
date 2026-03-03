@@ -263,6 +263,16 @@ class EWCTrainer:
             )
             logger.info(f"  Fisher computed ({self.fisher_samples} samples)")
 
+            # Build filter triples: all known triples from tasks seen so far
+            all_known = torch.cat([
+                torch.cat([
+                    task_factories[task_names[k]][split].mapped_triples
+                    for split in ("train", "val", "test")
+                    if split in task_factories[task_names[k]]
+                ])
+                for k in range(i + 1)
+            ])
+
             # Evaluate on all tasks seen so far
             for j in range(i + 1):
                 test_name = task_names[j]
@@ -270,6 +280,7 @@ class EWCTrainer:
                 metrics = evaluate_link_prediction(
                     model, test_tf,
                     device=self.device, batch_size=self.batch_size,
+                    all_known_mapped_triples=all_known,
                 )
                 R[i, j] = metrics["MRR"]
                 logger.info(f"  Eval {test_name}: MRR={metrics['MRR']:.4f}, "

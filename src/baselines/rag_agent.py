@@ -317,10 +317,12 @@ class BiomedicalRAGAgent:
         if not tails:
             return ""
 
-        # Return most common tail
+        # Return most common tail, cleaned to match gold answer format
+        from src.data.kgqa import _clean_entity_name
+
         counter = Counter(tails)
         answer = counter.most_common(1)[0][0]
-        return answer.replace("_", " ")
+        return _clean_entity_name(answer)
 
     def evaluate_kgqa(
         self,

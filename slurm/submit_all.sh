@@ -1,84 +1,51 @@
 #!/bin/bash
-# Submit ALL experiment jobs in parallel on IBEX
+# Submit all experiments — 1 seed per job
 # Usage: bash slurm/submit_all.sh
 #
-# This submits 20 independent jobs across 3 tasks:
-#
-# Link Prediction (14 jobs):
-#   4 baselines + 1 LKGE + 1 CMKL + 8 ablations = 14
-#
-# KGQA (1 job):
-#   1 RAG agent = 1
-#
-# Node Classification (5 jobs):
-#   4 baselines + 1 CMKL = 5
-#
-# Each job: 32G RAM (64G for RAG), 1 V100 GPU, up to 24 hours
-# All jobs have PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+# Each job has a meaningful name: {method_abbrev}_s{seed}
+# Monitor: watch -n 30 'grep -h "\[PROGRESS\]\|\[SUCCESS\]\|\[FAILED\]" slurm/slurm_logs/*.out | sort | tail -30'
 
+set -e
 mkdir -p slurm/slurm_logs
 
-echo "Submitting all MCGL experiment jobs..."
-echo "======================================="
-echo ""
+SEEDS="42 123 456 789 1024"
+COUNT=0
 
-# -----------------------------------------------------------
-# Link Prediction: 4 KGE Baselines (1 job each)
-# -----------------------------------------------------------
-echo "=== Link Prediction: Baselines ==="
-sbatch slurm/run_baseline.sh naive_sequential TransE
-sbatch slurm/run_baseline.sh joint_training TransE
-sbatch slurm/run_baseline.sh ewc TransE
-sbatch slurm/run_baseline.sh experience_replay TransE
+echo "Submitting all experiments (1 seed per job)..."
+echo "================================================"
 
-# -----------------------------------------------------------
-# Link Prediction: LKGE (Baseline 5)
-# -----------------------------------------------------------
-echo "=== Link Prediction: LKGE ==="
-sbatch slurm/run_lkge.sh TransE
+for SEED in $SEEDS; do
+    # KGE baselines (30h, 48G RAM)
+    sbatch -J ns_s${SEED} slurm/run_baseline.sh naive_sequential TransE $SEED
+    sbatch -J jt_s${SEED} slurm/run_baseline.sh joint_training TransE $SEED
+    sbatch -J ewc_s${SEED} slurm/run_baseline.sh ewc TransE $SEED
+    sbatch -J er_s${SEED} slurm/run_baseline.sh experience_replay TransE $SEED
 
-# -----------------------------------------------------------
-# Link Prediction: CMKL
-# -----------------------------------------------------------
-echo "=== Link Prediction: CMKL ==="
-sbatch slurm/run_cmkl.sh DistMult
+    # CMKL (30h, 48G RAM)
+    sbatch -J cmkl_s${SEED} slurm/run_cmkl.sh DistMult $SEED
 
-# -----------------------------------------------------------
-# Link Prediction: 8 Ablation Studies (1 job each)
-# -----------------------------------------------------------
-echo "=== Link Prediction: Ablations ==="
-sbatch slurm/run_ablations.sh struct_only
-sbatch slurm/run_ablations.sh text_only
-sbatch slurm/run_ablations.sh concat_fusion
-sbatch slurm/run_ablations.sh global_ewc
-sbatch slurm/run_ablations.sh random_replay
-sbatch slurm/run_ablations.sh buffer_size_sweep
-sbatch slurm/run_ablations.sh lambda_sweep
-sbatch slurm/run_ablations.sh distillation
+    # LKGE (48h, 128G RAM, skip task_0_base)
+    sbatch -J lkge_s${SEED} slurm/run_lkge.sh TransE $SEED
 
-# -----------------------------------------------------------
-# KGQA: RAG Agent (Baseline 6)
-# -----------------------------------------------------------
-echo "=== KGQA: RAG Agent ==="
-sbatch slurm/run_rag.sh
+    # RAG (24h, 128G RAM, no GPU, retrieval-only)
+    sbatch -J rag_s${SEED} slurm/run_rag.sh $SEED
 
-# -----------------------------------------------------------
-# Node Classification: 4 baselines + CMKL (1 job each)
-# -----------------------------------------------------------
-echo "=== Node Classification ==="
-sbatch slurm/run_nc.sh naive_sequential
-sbatch slurm/run_nc.sh joint_training
-sbatch slurm/run_nc.sh ewc
-sbatch slurm/run_nc.sh experience_replay
-sbatch slurm/run_nc.sh cmkl
+    # Node Classification (30h, 32G RAM)
+    sbatch -J nc_ns_s${SEED} slurm/run_nc.sh naive_sequential $SEED
+    sbatch -J nc_ewc_s${SEED} slurm/run_nc.sh ewc $SEED
+    sbatch -J nc_er_s${SEED} slurm/run_nc.sh experience_replay $SEED
+    sbatch -J nc_jt_s${SEED} slurm/run_nc.sh joint_training $SEED
+    sbatch -J nc_cmkl_s${SEED} slurm/run_nc.sh cmkl $SEED
+
+    COUNT=$((COUNT + 12))
+done
 
 echo ""
-echo "======================================="
-echo "Submitted 20 jobs. Monitor with: squeue -u \$USER"
-echo "Results will appear in results/*.json"
+echo "Submitted $COUNT jobs (5 seeds x 12 methods)"
 echo ""
-echo "Job breakdown:"
-echo "  Link Prediction:      14 jobs (4 baselines + LKGE + CMKL + 8 ablations)"
-echo "  KGQA:                  1 job  (RAG agent)"
-echo "  Node Classification:   5 jobs (4 baselines + CMKL)"
-echo "  Total:                20 jobs"
+echo "Monitor progress:"
+echo "  squeue -u \$USER"
+echo "  watch -n 30 'grep -h \"\\[PROGRESS\\]\\|\\[SUCCESS\\]\\|\\[FAILED\\]\" slurm/slurm_logs/*.out | sort | tail -30'"
+echo ""
+echo "After completion, merge results:"
+echo "  python scripts/merge_seed_results.py --input-dir results"

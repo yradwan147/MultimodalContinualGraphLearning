@@ -140,6 +140,8 @@ def main() -> None:
     parser.add_argument("--no-llm", action="store_true",
                         help="Use retrieval-only mode (no LLM)")
     parser.add_argument("--output-dir", default="results")
+    parser.add_argument("--output-suffix", default="",
+                        help="Suffix for output filename (e.g. _seed42)")
     parser.add_argument("--seeds", nargs="+", type=int, default=[42])
     parser.add_argument("--eval-multihop", action="store_true",
                         help="Run multi-hop RAG evaluation after standard eval")
@@ -169,6 +171,8 @@ def main() -> None:
     logger.info(f"LLM: {'disabled' if args.no_llm else args.llm}")
 
     all_seed_results = []
+    print(f"[STARTED] method=rag mode={'retrieval_only' if args.no_llm else 'full_rag'} "
+          f"seeds={args.seeds} tasks={len(task_names)} questions={args.questions_per_task}")
 
     for seed in args.seeds:
         logger.info(f"\n{'='*60}")
@@ -197,6 +201,26 @@ def main() -> None:
                     f"REM={cl['Remembering (REM)']:.4f} ({elapsed:.0f}s)")
 
         all_seed_results.append(result)
+        print(f"[PROGRESS] method=rag seed={seed} "
+              f"AP={cl['Average Performance (AP)']:.4f} "
+              f"AF={cl['Average Forgetting (AF)']:.4f} "
+              f"elapsed={elapsed:.0f}s")
+
+        # Save after each seed so partial results survive failures
+        mode = "retrieval_only" if args.no_llm else "full_rag"
+        result_path = output_dir / f"rag_{mode}{args.output_suffix}.json"
+        with open(result_path, "w") as f:
+            json.dump({
+                "method": "rag_agent",
+                "mode": mode,
+                "llm": args.llm if not args.no_llm else None,
+                "embedding_model": args.embedding_model,
+                "questions_per_task": args.questions_per_task,
+                "task_names": task_names,
+                "seeds": args.seeds,
+                "results": all_seed_results,
+            }, f, indent=2, default=str)
+        logger.info(f"Intermediate save: {result_path} ({len(all_seed_results)}/{len(args.seeds)} seeds)")
 
     # Multi-hop RAG evaluation (if requested)
     multihop_results = None
@@ -244,7 +268,7 @@ def main() -> None:
 
     # Save results
     mode = "retrieval_only" if args.no_llm else "full_rag"
-    result_path = output_dir / f"rag_{mode}.json"
+    result_path = output_dir / f"rag_{mode}{args.output_suffix}.json"
     output_data = {
         "method": "rag_agent",
         "mode": mode,
@@ -263,4 +287,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("[SUCCESS] run_rag completed")
+    except Exception as e:
+        print(f"[FAILED] run_rag error={str(e)[:200]}")
+        raise

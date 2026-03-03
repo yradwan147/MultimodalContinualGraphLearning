@@ -1,17 +1,17 @@
 #!/bin/bash --login
-#SBATCH --time=24:00:00
+#SBATCH --time=30:00:00
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
 #SBATCH --constraint=v100
 #SBATCH --partition=batch
 #SBATCH --cpus-per-gpu=2
 #SBATCH --mem=32G
-#SBATCH -J mcgl_nc
-#SBATCH -o slurm/slurm_logs/mcgl_nc_%J.out
+#SBATCH -o slurm/slurm_logs/%x_%J.out
 
-# Run node classification experiments on IBEX
-# Usage: sbatch slurm/run_nc.sh <method>
-#   Methods: naive_sequential, joint_training, ewc, experience_replay, cmkl
+# Run node classification with a single method and seed on IBEX
+# Usage:
+#   sbatch -J nc_ns_s42 slurm/run_nc.sh naive_sequential 42
+#   sbatch -J nc_ewc_s123 slurm/run_nc.sh ewc 123
 
 eval "$(~/miniconda3/bin/conda shell.bash hook)"
 conda activate mcgl
@@ -20,10 +20,11 @@ mkdir -p results slurm/slurm_logs
 
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
-METHOD=${1:?Usage: sbatch run_nc.sh <method>}
+METHOD=${1:?Usage: sbatch run_nc.sh <method> <seed>}
+SEED=${2:?Must provide seed}
 
 echo "Job ID: $SLURM_JOB_ID"
-echo "NC Method: $METHOD"
+echo "NC Method: $METHOD, Seed: $SEED"
 echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 echo "Start: $(date)"
 
@@ -33,7 +34,8 @@ python scripts/run_nc.py \
     --num-epochs 100 \
     --batch-size 512 \
     --device cuda \
-    --seeds 42 123 456 789 1024 \
-    --output-dir results
+    --seeds $SEED \
+    --output-dir results \
+    --output-suffix _seed${SEED}
 
 echo "End: $(date)"

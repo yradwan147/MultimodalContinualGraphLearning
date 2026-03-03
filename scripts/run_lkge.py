@@ -45,7 +45,14 @@ def main() -> None:
     parser.add_argument("--lkge-dir", default="external/LKGE",
                         help="Path to cloned LKGE repository")
     parser.add_argument("--num-epochs", type=int, default=100)
+    parser.add_argument("--emb-dim", type=int, default=50,
+                        help="Embedding dimension (default 50 to avoid OOM on large KGs)")
+    parser.add_argument("--batch-size", type=int, default=2048)
+    parser.add_argument("--skip-base-task", action="store_true",
+                        help="Skip task_0_base (5.67M triples) to avoid GCN OOM")
     parser.add_argument("--output-dir", default="results")
+    parser.add_argument("--output-suffix", default="",
+                        help="Suffix for output filename (e.g. _seed42)")
     parser.add_argument("--seeds", nargs="+", type=int, default=[42])
     parser.add_argument("--quick", action="store_true",
                         help="Quick mode: only test format conversion, no LKGE run")
@@ -62,6 +69,18 @@ def main() -> None:
     task_seq, entity_to_id, relation_to_id = load_task_sequence(
         args.tasks_dir, args.task_names
     )
+
+    # Optionally skip task_0_base (too large for LKGE's GCN)
+    if args.skip_base_task:
+        from collections import OrderedDict
+        task_seq = OrderedDict(
+            (k, v) for k, v in task_seq.items() if k != "task_0_base"
+        )
+        if not task_seq:
+            logger.error("No tasks remaining after skipping task_0_base")
+            return
+        logger.info(f"Skipped task_0_base, {len(task_seq)} tasks remaining")
+
     task_names = list(task_seq.keys())
 
     logger.info(f"Tasks: {task_names}")
@@ -76,7 +95,8 @@ def main() -> None:
     lkge_path = Path(lkge_data_dir)
     assert (lkge_path / "entity2id.txt").exists(), "entity2id.txt not created"
     assert (lkge_path / "relation2id.txt").exists(), "relation2id.txt not created"
-    n_snapshots = len(list(lkge_path.glob("snapshot_*")))
+    n_snapshots = len([d for d in lkge_path.iterdir()
+                       if d.is_dir() and d.name.isdigit()])
     logger.info(f"LKGE format: {n_snapshots} snapshots in {lkge_data_dir}")
 
     if args.quick:
@@ -100,6 +120,8 @@ def main() -> None:
 
     # Full run: execute LKGE for each seed
     all_seed_results = []
+    print(f"[STARTED] method=lkge model={args.model} seeds={args.seeds} "
+          f"emb_dim={args.emb_dim} snapshots={n_snapshots}")
 
     for seed in args.seeds:
         logger.info(f"\n{'='*60}")
@@ -114,6 +136,8 @@ def main() -> None:
             model=args.model,
             num_epochs=args.num_epochs,
             seed=seed,
+            emb_dim=args.emb_dim,
+            batch_size=args.batch_size,
         )
         elapsed = time.time() - start
 
@@ -134,18 +158,30 @@ def main() -> None:
 
         all_seed_results.append(results)
 
-    # Save results
-    result_path = output_dir / f"lkge_{args.model}.json"
-    with open(result_path, "w") as f:
-        json.dump({
-            "method": "lkge",
-            "model": args.model,
-            "task_names": task_names,
-            "seeds": args.seeds,
-            "results": all_seed_results,
-        }, f, indent=2, default=str)
-    logger.info(f"Results saved to {result_path}")
+        if "Average Performance (AP)" in results:
+            print(f"[PROGRESS] method=lkge seed={seed} "
+                  f"AP={results['Average Performance (AP)']:.4f} "
+                  f"elapsed={elapsed:.0f}s")
+        else:
+            print(f"[PROGRESS] method=lkge seed={seed} elapsed={elapsed:.0f}s")
+
+        # Save after each seed so partial results survive failures
+        result_path = output_dir / f"lkge_{args.model}{args.output_suffix}.json"
+        with open(result_path, "w") as f:
+            json.dump({
+                "method": "lkge",
+                "model": args.model,
+                "task_names": task_names,
+                "seeds": args.seeds,
+                "results": all_seed_results,
+            }, f, indent=2, default=str)
+        logger.info(f"Results saved to {result_path} ({len(all_seed_results)}/{len(args.seeds)} seeds)")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("[SUCCESS] run_lkge completed")
+    except Exception as e:
+        print(f"[FAILED] run_lkge error={str(e)[:200]}")
+        raise

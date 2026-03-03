@@ -76,6 +76,8 @@ def main() -> None:
         help="Random seeds (default: [42])",
     )
     parser.add_argument("--output-dir", default="results")
+    parser.add_argument("--output-suffix", default="",
+                        help="Suffix for output filename (e.g. _seed42)")
     parser.add_argument(
         "--eval-multihop", action="store_true",
         help="Run multi-hop path evaluation after training",
@@ -138,6 +140,9 @@ def main() -> None:
     logger.info(f"Replay: buffer={config['replay_buffer_size']}, weight={config['replay_weight']}")
 
     all_seed_results = []
+    total_start = time.time()
+    print(f"[STARTED] method=cmkl decoder={args.decoder} seeds={args.seeds} "
+          f"tasks={len(task_names)} epochs={config['num_epochs']}")
 
     for seed in args.seeds:
         logger.info(f"\n{'='*60}")
@@ -172,10 +177,35 @@ def main() -> None:
             if isinstance(val, float):
                 logger.info(f"  {name}: {val:.4f}")
 
-    # Multi-hop evaluation (if requested)
+        seed_elapsed = time.time() - total_start
+        print(f"[PROGRESS] method=cmkl seed={seed} "
+              f"AP={cl_metrics['Average Performance (AP)']:.4f} "
+              f"AF={cl_metrics['Average Forgetting (AF)']:.4f} "
+              f"elapsed={seed_elapsed:.0f}s")
+
+        # Save after each seed so partial results survive failures
+        result_path = output_dir / f"cmkl_{args.decoder}{args.output_suffix}.json"
+        with open(result_path, "w") as f:
+            json.dump({
+                "method": "cmkl",
+                "decoder": args.decoder,
+                "fusion": args.fusion,
+                "config": config,
+                "task_names": task_names,
+                "seeds": args.seeds,
+                "results": all_seed_results,
+            }, f, indent=2)
+        logger.info(f"Intermediate save: {result_path} ({len(all_seed_results)}/{len(args.seeds)} seeds)")
+
+    # Multi-hop evaluation (if requested) — uses the last seed's model
     multihop_results = None
     if args.eval_multihop:
-        from src.evaluation.multihop import extract_all_path_types
+        from src.evaluation.multihop import (
+            extract_all_path_types,
+            evaluate_multihop,
+            make_cmkl_score_fn,
+        )
+        import torch
 
         logger.info("Running multi-hop path evaluation...")
         all_train = np.concatenate(
@@ -186,11 +216,29 @@ def main() -> None:
         )
         multihop_results = {}
         for desc, paths in all_paths.items():
+            if not paths:
+                continue
             multihop_results[desc] = {"num_paths": len(paths)}
             logger.info(f"  {desc}: {len(paths):,} paths extracted")
 
+        # Score with the last trained CMKL model
+        if model is not None:
+            model.eval()
+            with torch.no_grad():
+                fused_emb = model.forward()
+            score_fn = make_cmkl_score_fn(model, fused_emb, device=args.device)
+            for desc, paths in all_paths.items():
+                if not paths:
+                    continue
+                mh_metrics = evaluate_multihop(
+                    score_fn, paths, len(entity_to_id),
+                )
+                multihop_results[desc].update(mh_metrics)
+                logger.info(f"  {desc}: MRR={mh_metrics['multihop_MRR']:.4f}, "
+                            f"H@10={mh_metrics['multihop_Hits@10']:.4f}")
+
     # Save results
-    result_path = output_dir / f"cmkl_{args.decoder}.json"
+    result_path = output_dir / f"cmkl_{args.decoder}{args.output_suffix}.json"
     output_data = {
         "method": "cmkl",
         "decoder": args.decoder,
@@ -217,4 +265,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("[SUCCESS] run_cmkl completed")
+    except Exception as e:
+        print(f"[FAILED] run_cmkl error={str(e)[:200]}")
+        raise

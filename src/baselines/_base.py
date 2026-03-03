@@ -225,16 +225,21 @@ def evaluate_link_prediction(
     test_factory: TriplesFactory,
     device: str = "cpu",
     batch_size: int = 256,
+    all_known_mapped_triples: torch.Tensor | None = None,
 ) -> dict[str, float]:
     """Evaluate model on a test set using rank-based metrics.
 
-    Computes MRR, Hits@1, Hits@3, Hits@10 using PyKEEN's evaluator.
+    Computes MRR, Hits@1, Hits@3, Hits@10 using PyKEEN's evaluator
+    with filtered ranking (standard protocol). Known true triples are
+    excluded from candidate rankings to avoid penalizing valid predictions.
 
     Args:
         model: Trained PyKEEN model.
         test_factory: TriplesFactory for test data.
         device: Device for evaluation.
         batch_size: Evaluation batch size.
+        all_known_mapped_triples: Concatenated train+val+test triples from
+            all tasks for filtered ranking. If None, uses raw ranking.
 
     Returns:
         Dict with MRR, Hits@1, Hits@3, Hits@10.
@@ -246,10 +251,14 @@ def evaluate_link_prediction(
     model.eval()
     evaluator = RankBasedEvaluator()
 
+    filter_triples = None
+    if all_known_mapped_triples is not None:
+        filter_triples = all_known_mapped_triples.to(device)
+
     results = evaluator.evaluate(
         model=model,
         mapped_triples=test_factory.mapped_triples.to(device),
-        additional_filter_triples=None,
+        additional_filter_triples=filter_triples,
         batch_size=batch_size,
     )
     _log_mem("after eval")

@@ -83,8 +83,11 @@ def run_nc_kge_baseline(
     from src.baselines._base import (
         make_triples_factory,
         create_model, train_epoch, get_device,
+        _generate_negatives, _margin_loss,
     )
     from src.baselines.nc_baseline import NCBaseline
+    from src.baselines.ewc import EWC_KGE
+    from src.baselines.experience_replay import ExperienceReplayKGE
     from src.evaluation.metrics import evaluate_continual_learning
 
     torch.manual_seed(seed)
@@ -113,24 +116,73 @@ def run_nc_kge_baseline(
         num_epochs=100,
     )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     nc_idx = 0
+
+    # Method-specific state
+    ewc = EWC_KGE(model, lambda_ewc=10.0) if method == "ewc" else None
+    replay = ExperienceReplayKGE(
+        buffer_size_per_task=500, selection_strategy="relation_balanced"
+    ) if method == "experience_replay" else None
 
     for task_idx, task_name in enumerate(task_names):
         logger.info(f"=== Task {task_idx + 1}/{num_tasks}: {task_name} ({method}) ===")
         task_data = task_seq[task_name]
-        tf_train = make_triples_factory(task_data["train"], entity_to_id, relation_to_id)
+        train_data = task_data["train"]
+        tf_train = make_triples_factory(train_data, entity_to_id, relation_to_id)
 
-        # Train KGE on this task
+        # Method-specific training data preparation
         if method == "joint_training":
             # Joint: accumulate all triples
             all_triples = np.vstack([
                 task_seq[t]["train"] for t in task_names[:task_idx + 1]
             ])
             tf_train = make_triples_factory(all_triples, entity_to_id, relation_to_id)
+        elif method == "experience_replay" and replay is not None:
+            # Mix current task with replay buffer
+            replay_triples = replay.get_replay_triples()
+            if replay_triples is not None:
+                n_replay = min(
+                    int(len(train_data) * 0.3), len(replay_triples)
+                )
+                replay_idx = np.random.choice(
+                    len(replay_triples), n_replay, replace=True
+                )
+                combined = np.concatenate(
+                    [train_data, replay_triples[replay_idx]], axis=0
+                )
+                tf_train = make_triples_factory(combined, entity_to_id, relation_to_id)
+                logger.info(f"  Replay: {len(train_data)} current + {n_replay} replay")
 
-        for epoch in range(num_epochs):
-            train_epoch(model, tf_train, optimizer, device=device, batch_size=batch_size)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+        if method == "ewc" and ewc is not None:
+            # EWC: custom training loop with penalty
+            model.train()
+            mapped = tf_train.mapped_triples.to(device)
+            for epoch in range(num_epochs):
+                perm = torch.randperm(mapped.shape[0], device=device)
+                shuffled = mapped[perm]
+                for start in range(0, shuffled.shape[0], batch_size):
+                    batch = shuffled[start:start + batch_size]
+                    neg = _generate_negatives(batch, model.num_entities, device)
+                    pos_scores = model.score_hrt(batch)
+                    neg_scores = model.score_hrt(neg)
+                    base_loss = _margin_loss(pos_scores, neg_scores)
+                    total_loss = base_loss + ewc.ewc_loss()
+                    optimizer.zero_grad()
+                    total_loss.backward()
+                    optimizer.step()
+        else:
+            # Naive sequential, joint, experience_replay: standard training
+            for epoch in range(num_epochs):
+                train_epoch(model, tf_train, optimizer, device=device, batch_size=batch_size)
+
+        # Post-task updates for CL methods
+        if method == "ewc" and ewc is not None:
+            ewc.compute_fisher(tf_train, device=device, n_samples=1000)
+            logger.info("  Fisher computed")
+        elif method == "experience_replay" and replay is not None:
+            replay.add_task(train_data, task_idx)
 
         # If this task has NC data, evaluate on all NC tasks seen so far
         if task_name in nc_tasks:
@@ -273,6 +325,8 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seeds", nargs="+", type=int, default=[42])
     parser.add_argument("--output-dir", default="results")
+    parser.add_argument("--output-suffix", default="",
+                        help="Suffix for output filename (e.g. _seed42)")
     parser.add_argument("--quick", action="store_true",
                         help="Quick mode: dim=64, epochs=3")
     args = parser.parse_args()
@@ -309,8 +363,11 @@ def main() -> None:
         logger.info(f"\n{'='*60}")
         logger.info(f"NC Method: {method}")
         logger.info(f"{'='*60}")
+        print(f"[STARTED] method=nc_{method} seeds={args.seeds} "
+              f"tasks={len(task_names)} epochs={args.num_epochs}")
 
         all_seed_results = []
+        method_start = time.time()
 
         for seed in args.seeds:
             logger.info(f"  Seed {seed}")
@@ -339,8 +396,15 @@ def main() -> None:
 
             all_seed_results.append(result)
 
+            if "cl_metrics" in result:
+                seed_elapsed = time.time() - method_start
+                cl = result["cl_metrics"]
+                print(f"[PROGRESS] method=nc_{method} seed={seed} "
+                      f"AP={cl['Average Performance (AP)']:.4f} "
+                      f"elapsed={seed_elapsed:.0f}s")
+
         # Save results
-        result_path = output_dir / f"nc_{method}.json"
+        result_path = output_dir / f"nc_{method}{args.output_suffix}.json"
         with open(result_path, "w") as f:
             json.dump({
                 "method": method,
@@ -353,4 +417,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("[SUCCESS] run_nc completed")
+    except Exception as e:
+        print(f"[FAILED] run_nc error={str(e)[:200]}")
+        raise

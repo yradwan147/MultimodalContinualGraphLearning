@@ -555,16 +555,22 @@ class CMKL(nn.Module):
 
             # 4. Evaluate on all tasks seen so far
             self.eval()
+
+            # Build filter set: all known triples from tasks seen so far
+            all_known_triples = np.concatenate([
+                np.concatenate([
+                    task_sequence[task_names[k]][split]
+                    for split in ("train", "val", "test")
+                    if split in task_sequence[task_names[k]]
+                ])
+                for k in range(task_idx + 1)
+            ])
+
             for eval_idx in range(task_idx + 1):
                 eval_name = task_names[eval_idx]
                 eval_data = task_sequence[eval_name]
 
-                # Use PyKEEN evaluator for comparable metrics
-                test_factory = make_triples_factory(
-                    eval_data["test"], entity_to_id, relation_to_id,
-                )
-                # We need a PyKEEN-compatible evaluation, but our model isn't PyKEEN.
-                # Instead, compute MRR manually.
+                # Compute MRR with filtered ranking
                 test_mrr = self._evaluate_mrr(
                     eval_data["test"],
                     entity_to_id,
@@ -576,6 +582,7 @@ class CMKL(nn.Module):
                     edge_index,
                     edge_type,
                     device,
+                    known_triples=all_known_triples,
                 )
                 results_matrix[task_idx, eval_idx] = test_mrr
                 logger.info(f"  Eval {eval_name}: MRR={test_mrr:.4f}")
@@ -593,20 +600,22 @@ class CMKL(nn.Module):
         entity_to_id: dict[str, int],
         relation_to_id: dict[str, int],
     ) -> np.ndarray:
-        """Map string triples to integer IDs.
+        """Ensure triples are int64 format.
+
+        Note: load_task_sequence() already returns pre-mapped int64 arrays,
+        so this is effectively an identity operation. Previously this tried
+        to map via entity_to_id.get() but the keys are strings while the
+        values coming in are int64, causing all lookups to return 0.
 
         Args:
-            triples: [N, 3] string triples.
-            entity_to_id: Entity mapping.
-            relation_to_id: Relation mapping.
+            triples: [N, 3] int64 triples (already mapped).
+            entity_to_id: Entity mapping (unused, kept for API compat).
+            relation_to_id: Relation mapping (unused, kept for API compat).
 
         Returns:
             [N, 3] integer triples.
         """
-        mapped = np.zeros((len(triples), 3), dtype=np.int64)
-        for i, (h, r, t) in enumerate(triples):
-            mapped[i] = [entity_to_id.get(h, 0), relation_to_id.get(r, 0), entity_to_id.get(t, 0)]
-        return mapped
+        return np.asarray(triples, dtype=np.int64)
 
     def _train_epoch(
         self,
@@ -777,22 +786,26 @@ class CMKL(nn.Module):
         edge_type: torch.Tensor | None,
         device: str,
         batch_size: int = 256,
+        known_triples: np.ndarray | None = None,
     ) -> float:
-        """Evaluate MRR on test triples.
+        """Evaluate MRR on test triples with optional filtered ranking.
 
         For each test triple (h, r, t):
         - Score all entities as potential tails: score(h, r, e) for all e
-        - Rank the true tail among all entities
+        - Filter out known true tails (except the test triple itself)
+        - Rank the true tail among remaining entities
         - MRR = mean(1/rank)
 
         Args:
-            test_triples: [N, 3] string triples.
-            entity_to_id: Entity mapping.
-            relation_to_id: Relation mapping.
+            test_triples: [N, 3] int64 triples (pre-mapped by load_task_sequence).
+            entity_to_id: Entity mapping (kept for API compat).
+            relation_to_id: Relation mapping (kept for API compat).
             text_embeddings, mol_fingerprints, node_has_text, node_has_mol,
             edge_index, edge_type: Multimodal features.
             device: Device.
             batch_size: Evaluation batch size.
+            known_triples: All known (h, r, t) triples for filtered ranking.
+                If provided, known tails for each (h, r) are masked out.
 
         Returns:
             MRR score.
@@ -801,6 +814,15 @@ class CMKL(nn.Module):
         mapped = self._map_triples(test_triples, entity_to_id, relation_to_id)
         if len(mapped) == 0:
             return 0.0
+
+        # Build filter: for each (h, r), collect known tail entities
+        hr_to_tails: dict[tuple[int, int], set[int]] = {}
+        if known_triples is not None:
+            for h, r, t in known_triples:
+                key = (int(h), int(r))
+                if key not in hr_to_tails:
+                    hr_to_tails[key] = set()
+                hr_to_tails[key].add(int(t))
 
         # Get fused embeddings
         h_fused = self.forward(
@@ -822,20 +844,29 @@ class CMKL(nn.Module):
             # Score all entities as tails for each (h, r) pair
             h_embs = h_fused[heads]  # [B, D]
             if self.config["decoder_type"] == "Bilinear":
-                # For bilinear: h^T M_r t for all t
                 M = self.decoder.relation_matrices[rels]  # [B, D, D]
                 h_M = torch.einsum("bi,bij->bj", h_embs, M)  # [B, D]
                 all_scores = h_M @ h_fused.T  # [B, N]
             else:
                 r_embs = self.relation_emb(rels)  # [B, D]
                 if self.config["decoder_type"] == "TransE":
-                    # TransE: -||h + r - t|| for all t
                     query = h_embs + r_embs  # [B, D]
                     all_scores = -torch.cdist(query, h_fused, p=self.decoder.p_norm)  # [B, N]
                 else:
-                    # DistMult: (h * r) . t for all t
                     query = h_embs * r_embs  # [B, D]
                     all_scores = query @ h_fused.T  # [B, N]
+
+            # Filtered ranking: mask out known tails except the true one
+            if hr_to_tails:
+                for b_idx in range(B):
+                    h_val = heads[b_idx].item()
+                    r_val = rels[b_idx].item()
+                    t_val = tails[b_idx].item()
+                    known = hr_to_tails.get((h_val, r_val), set())
+                    if known:
+                        mask_ids = [t for t in known if t != t_val]
+                        if mask_ids:
+                            all_scores[b_idx, mask_ids] = float("-inf")
 
             # Get rank of true tail
             true_scores = all_scores[torch.arange(B, device=device), tails]  # [B]
