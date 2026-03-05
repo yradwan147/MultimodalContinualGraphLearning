@@ -1,0 +1,231 @@
+{
+  "method": "cmkl",
+  "decoder": "DistMult",
+  "fusion": "cross_attention",
+  "config": {
+    "num_entities": 123400,
+    "num_relations": 30,
+    "embedding_dim": 256,
+    "num_gnn_layers": 2,
+    "num_attention_heads": 4,
+    "fusion_type": "cross_attention",
+    "decoder_type": "DistMult",
+    "lambda_struct": 10.0,
+    "lambda_text": 5.0,
+    "lambda_mol": 1.0,
+    "replay_buffer_size": 1000,
+    "replay_weight": 0.5,
+    "use_distillation": false,
+    "distillation_temperature": 2.0,
+    "distillation_alpha": 0.5,
+    "lr": 0.001,
+    "num_epochs": 100,
+    "batch_size": 512
+  },
+  "task_names": [
+    "task_0_base",
+    "task_1_disease_related",
+    "task_1_drug_related",
+    "task_2_disease_related",
+    "task_2_gene_protein",
+    "task_3_gene_protein",
+    "task_3_phenotype_related",
+    "task_4_biological_process",
+    "task_4_phenotype_related",
+    "task_5_anatomy_pathway"
+  ],
+  "seeds": [
+    789
+  ],
+  "results": [
+    {
+      "Average Performance (AP)": 0.0638384217525161,
+      "Average Forgetting (AF)": 0.03750010280372453,
+      "Backward Transfer (BWT)": -0.037484542234354705,
+      "Forward Transfer (FWT)": 0.0,
+      "Remembering (REM)": 0.9625154577656453,
+      "seed": 789,
+      "results_matrix": [
+        [
+          0.2605456880847229,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.19654441605021786,
+          0.09972005184526025,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.13101852199895864,
+          0.05146270850473663,
+          0.0005373477695314871,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.09990606798343142,
+          0.03649524421821579,
+          0.0006631073487827738,
+          0.0007347418348000143,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.027675471856489255,
+          0.009201662378519345,
+          0.0005834095901369173,
+          0.000687169886350307,
+          0.4660492575356519,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.027655536370574912,
+          0.008393920961569538,
+          0.0005182079068857136,
+          0.0005053759100425321,
+          0.32490967043183433,
+          0.0007892368712747425,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.02798813500139958,
+          0.011619074093516965,
+          0.0005993142054893613,
+          0.0005334278109345763,
+          0.32071362156691363,
+          0.0007240350025756446,
+          0.05497530796974604,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.03203183415641824,
+          0.013527975690527891,
+          0.0005421331356044605,
+          0.0005941801562413757,
+          0.3161118150429726,
+          0.0006972336356589241,
+          0.04292949970843674,
+          0.02468508779539074,
+          0.0,
+          0.0
+        ],
+        [
+          0.025749981060724583,
+          0.010200997115319339,
+          0.0006773928938599097,
+          0.0005516761696798642,
+          0.28427651271834464,
+          0.0007796152221489774,
+          0.033980825158102884,
+          0.021137745399775098,
+          0.0012943101641925935,
+          0.0
+        ],
+        [
+          0.020142561380496696,
+          0.010231431235742007,
+          0.0004674640475335678,
+          0.0005618549982395766,
+          0.5222276182167298,
+          0.0006323912620798339,
+          0.010536868622813736,
+          0.0060455332941352306,
+          0.0011244267036078668,
+          0.06641406776378268
+        ]
+      ],
+      "training_time_s": 93164.20943284035
+    }
+  ],
+  "multihop_paths": {
+    "drug -> protein -> disease": {
+      "num_paths": 5000,
+      "multihop_MRR": 0.0005827690378606605,
+      "multihop_Hits@1": 0.0,
+      "multihop_Hits@3": 0.0002,
+      "multihop_Hits@10": 0.0004,
+      "multihop_mean_rank": 27986.3854
+    },
+    "drug -> protein -> pathway": {
+      "num_paths": 5000,
+      "multihop_MRR": 1.9149228782738386e-05,
+      "multihop_Hits@1": 0.0,
+      "multihop_Hits@3": 0.0,
+      "multihop_Hits@10": 0.0,
+      "multihop_mean_rank": 65364.4702
+    },
+    "drug -> protein -> bioprocess": {
+      "num_paths": 5000,
+      "multihop_MRR": 0.0006350605072499605,
+      "multihop_Hits@1": 0.0,
+      "multihop_Hits@3": 0.0002,
+      "multihop_Hits@10": 0.0018,
+      "multihop_mean_rank": 41689.4946
+    },
+    "disease -> protein -> pathway": {
+      "num_paths": 5000,
+      "multihop_MRR": 0.002110322072738925,
+      "multihop_Hits@1": 0.0002,
+      "multihop_Hits@3": 0.0006,
+      "multihop_Hits@10": 0.0032,
+      "multihop_mean_rank": 36277.8582
+    },
+    "disease -> protein -> bioprocess": {
+      "num_paths": 5000,
+      "multihop_MRR": 0.002677804714652066,
+      "multihop_Hits@1": 0.0008,
+      "multihop_Hits@3": 0.002,
+      "multihop_Hits@10": 0.0052,
+      "multihop_mean_rank": 31273.1052
+    },
+    "drug -> protein -> protein": {
+      "num_paths": 5000,
+      "multihop_MRR": 0.0005031003621434873,
+      "multihop_Hits@1": 0.0,
+      "multihop_Hits@3": 0.0,
+      "multihop_Hits@10": 0.0002,
+      "multihop_mean_rank": 12129.665
+    },
+    "disease -> protein -> protein": {
+      "num_paths": 5000,
+      "multihop_MRR": 0.0008869478745490326,
+      "multihop_Hits@1": 0.0,
+      "multihop_Hits@3": 0.0004,
+      "multihop_Hits@10": 0.0014,
+      "multihop_mean_rank": 9258.2814
+    }
+  }
+}

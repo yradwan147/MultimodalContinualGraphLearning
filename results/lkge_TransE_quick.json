@@ -1,0 +1,12 @@
+{
+  "method": "lkge",
+  "model": "TransE",
+  "task_names": [
+    "task_1_disease_related",
+    "task_3_phenotype_related"
+  ],
+  "num_snapshots": 2,
+  "lkge_data_dir": "results/lkge_format",
+  "status": "format_conversion_only",
+  "lkge_command": "cd external/LKGE && python main.py -dataset results/lkge_format -gpu 0 -lifelong_name LKGE -model TransE -epoch 100"
+}

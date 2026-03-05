@@ -1,0 +1,169 @@
+{
+  "method": "rag_agent",
+  "mode": "retrieval_only",
+  "llm": null,
+  "embedding_model": "pritamdeka/S-PubMedBert-MS-MARCO",
+  "questions_per_task": 200,
+  "task_names": [
+    "task_0_base",
+    "task_1_disease_related",
+    "task_1_drug_related",
+    "task_2_disease_related",
+    "task_2_gene_protein",
+    "task_3_gene_protein",
+    "task_3_phenotype_related",
+    "task_4_biological_process",
+    "task_4_phenotype_related",
+    "task_5_anatomy_pathway"
+  ],
+  "seeds": [
+    123
+  ],
+  "results": [
+    {
+      "results_matrix": [
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          0.0,
+          0.01,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          0.0,
+          0.01,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          0.0,
+          0.01,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          0.0,
+          0.01,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "task_names": [
+        "task_0_base",
+        "task_1_disease_related",
+        "task_1_drug_related",
+        "task_2_disease_related",
+        "task_2_gene_protein",
+        "task_3_gene_protein",
+        "task_3_phenotype_related",
+        "task_4_biological_process",
+        "task_4_phenotype_related",
+        "task_5_anatomy_pathway"
+      ],
+      "cl_metrics": {
+        "Average Performance (AP)": 0.0025,
+        "Average Forgetting (AF)": 0.0,
+        "Backward Transfer (BWT)": 0.0,
+        "Forward Transfer (FWT)": 0.0,
+        "Remembering (REM)": 1.0
+      },
+      "seed": 123,
+      "training_time_s": 89457.97191262245
+    }
+  ]
+}

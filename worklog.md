@@ -1178,7 +1178,27 @@ Completed methods:
 - DistMult type-selection effect: MRR=0.50 (CMKL DistMult) vs MRR=0.02 (TransE)
 - task_5 shares 1.16M reversed triples → positive backward transfer
 
+### Multi-Hop Evaluation — Deferred to Run 3
+Decision: Leave `--eval-multihop` **disabled** for Run 2 (rerun of failed jobs) to avoid any crashes during main results collection. Multi-hop eval will be a standalone post-hoc evaluation in Run 3:
+- Create `scripts/run_multihop_eval.py` that loads saved model checkpoints and runs `evaluate_multihop()` independently
+- No retraining needed — just load checkpoints from Run 2 and score multi-hop paths
+- This keeps Run 2 clean and fast, and multi-hop results can be added to the paper separately
+- Multi-hop code is already implemented in `src/evaluation/multihop.py` with `make_pykeen_score_fn()` and `make_cmkl_score_fn()`
+
+### New Data Sources Acquired (for future rerun)
+User obtained two previously-disabled databases:
+- **`umls-2025AB-full.zip`** — UMLS 2025AB full release (in project root)
+- **`drugbank_all_full_database.xml.zip`** — DrugBank full database XML (in project root)
+
+These were among the 7 disabled sources in `configs/t1_sources.yaml` (drugbank, umls needed licenses). Incorporating them into the t1 rebuild would add:
+- **DrugBank:** drug-drug interactions, drug-target, drug-enzyme, drug-carrier, drug-transporter relations
+- **UMLS:** disease/phenotype mappings, cross-ontology links, semantic type enrichment
+
+**Plan:** After Run 2 main results are collected and paper tables generated, rebuild t1 with these sources enabled in `kg_builder.py`, then rerun all experiments on the expanded benchmark. This is a separate future run — don't block current paper progress.
+
 ### Next Steps
 1. Push fixes to GitHub, pull on IBEX
 2. Run `bash slurm/submit_rerun.sh` (22 jobs)
 3. After completion: merge results, generate tables
+4. **Run 3:** Standalone multi-hop evaluation on saved checkpoints (see above)
+5. **Future rerun:** Rebuild t1 with DrugBank + UMLS data, rerun all experiments on expanded benchmark

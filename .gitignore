@@ -56,3 +56,18 @@ external/
 
 # Large binary files
 *.pdf
+*.zip
+
+# Backup directories
+backup_results/
+backup_slurm_logs/
+
+# SLURM logs (large, machine-specific)
+slurm/slurm_logs/
+
+# LKGE intermediate files
+results/lkge_format/
+results/lkge_checkpoints/
+
+# Tools (cloned repos)
+tools/
