@@ -1099,3 +1099,86 @@ Executed all 9 priorities from `.claude-plans/phase5.7-fix-bugs-optimize-slurm.m
 - Run `bash slurm/submit_all.sh` on IBEX
 - Monitor with: `watch -n 30 'grep -h "\[PROGRESS\]\|\[SUCCESS\]\|\[FAILED\]" slurm/slurm_logs/*.out | sort | tail -30'`
 - After completion: `python scripts/merge_seed_results.py --input-dir results`
+
+---
+
+## 2026-03-05 Session - Investigation: gene_protein MRR Anomaly
+
+### Investigation: Why does task_2_gene_protein achieve MRR ~0.50 while other tasks get 0.001-0.07?
+
+**Conclusion: NOT data leakage. This is a structurally easy task due to extreme tail cardinality imbalance.**
+
+### Evidence
+
+1. **Tail cardinality is the primary driver:**
+   - `task_2_gene_protein` is 83.6% `anatomy_protein_present` relation (476K of 570K test triples)
+   - `anatomy_protein_present` has only **310 unique tail entities** (anatomy nodes) but 32,104 head entities (genes)
+   - DistMult scores all 123,400 entities as candidate tails, but only 310 are valid anatomy entities
+   - The model easily learns to assign high scores to the 310 anatomy entities, collapsing the effective search space from 123K to ~310
+   - Average head outdegree = 51.9 out of 310 (16.8% density) -- very dense, highly learnable
+
+2. **Comparison with task_5_anatomy_pathway confirms this:**
+   - Contains the SAME `anatomy_protein_present` relation but REVERSED direction (anatomy as head, gene as tail)
+   - Has **32,088 unique tails** (genes) instead of 310
+   - MRR: 0.05-0.07 (10x lower than gene_protein's 0.50), consistent with ~100x more tail candidates
+   - 1.16M triples overlap between the two tasks (reversed direction)
+
+3. **Joint training TransE achieves only MRR=0.0219 on gene_protein:**
+   - TransE uses L1/L2 distance (h + r - t) which doesn't create the same multiplicative "type selection" effect
+   - DistMult's element-wise product (h * r) can learn a pattern that strongly selects the 310 anatomy entities
+   - This is a known DistMult property: it excels at relation-specific entity type discrimination
+
+4. **gene_protein MRR increases after task_5_anatomy_pathway (0.26 -> 0.52):**
+   - Training on task_5 re-exposes the model to anatomy entity embeddings, refreshing gene_protein performance
+   - This is "positive backward transfer" from shared entity structure, not leakage
+
+5. **Minor data quality issue found (not causing the high MRR):**
+   - `exposure_protein` relation has duplicate triples: 17,940 total but only 6,951 unique (61% redundancy)
+   - Causes 1,356 exact train/test overlapping triples (0.24% of test) -- negligible impact on MRR
+   - Root cause: pipe characters in tail entity names (e.g., "Commercial product|Environmental") may have confused dedup
+
+### Recommendations
+- **For paper reporting:** Report gene_protein MRR separately with a note about tail cardinality. Consider reporting per-relation MRR breakdown.
+- **Fix exposure_protein duplicates:** Deduplicate triples in `src/data/task_sequence.py` before splitting
+- **Consider macro-averaged MRR:** Weight each relation equally rather than each triple equally, to avoid anatomy_protein_present dominating
+- **No need to remove gene_protein:** The high MRR is legitimate -- DistMult genuinely performs well on low-cardinality tail prediction tasks
+
+---
+
+## 2026-03-05 Session - Run 1 Analysis + Fixes for Rerun
+
+### Run 1 Results Analysis (see `docs/run1_report.md` for full report)
+
+**60 jobs submitted, 28 completed, 17 segfaulted, 5 timed out.**
+
+Completed methods:
+- CMKL LP: 5/5 seeds, AP=0.063 +/- 0.003 (MRR=1.0 bug CONFIRMED FIXED)
+- LKGE LP: 5/5 seeds, AP=0.039 +/- 0.001 (results reparsed after fixing parser)
+- Joint Training LP: 3/5 seeds, AP=0.020 +/- 0.001
+- NC (all 5 methods): 25/25 seeds complete (EWC/replay now DIFFERENT from naive — bug CONFIRMED FIXED)
+- RAG: 1/5 seeds, F1~0.005 (retrieval-only, useless without LLM)
+
+### Root Causes of Failures
+
+1. **Segfault (17 jobs):** PyKEEN all-entity evaluation on task_0_base (1.62M test triples x 129K entities). CUDA driver OOM manifests as segfault.
+2. **Time limit (5 RAG jobs):** 24h not enough for ChromaDB indexing + retrieval-only mode.
+
+### Changes Made
+- `src/baselines/lkge.py`: Break before "Report Result" table + MRR bounds check
+- `src/baselines/_base.py`: Added `max_test_triples=50000` to `evaluate_link_prediction()` to prevent segfault
+- `src/baselines/rag_agent.py`: Switched default LLM to `Qwen/Qwen2.5-7B-Instruct`, explicit model loading
+- `scripts/run_rag.py`: Updated default LLM
+- `slurm/run_baseline.sh`: Removed `--eval-multihop` (was triggering eval on massive test sets)
+- `slurm/run_rag.sh`: Added GPU, Qwen LLM, 48h limit
+- `slurm/submit_rerun.sh`: NEW — submits only the 22 failed jobs
+- `docs/run1_report.md`: NEW — full analysis report
+
+### Gene-Protein Task Investigation
+- NOT leakage: 84% of test triples are anatomy_protein_present with only 310 unique tails
+- DistMult type-selection effect: MRR=0.50 (CMKL DistMult) vs MRR=0.02 (TransE)
+- task_5 shares 1.16M reversed triples → positive backward transfer
+
+### Next Steps
+1. Push fixes to GitHub, pull on IBEX
+2. Run `bash slurm/submit_rerun.sh` (22 jobs)
+3. After completion: merge results, generate tables

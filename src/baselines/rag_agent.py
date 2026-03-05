@@ -63,7 +63,7 @@ class BiomedicalRAGAgent:
 
     def __init__(
         self,
-        llm_name: str = "meta-llama/Meta-Llama-3-8B-Instruct",
+        llm_name: str = "Qwen/Qwen2.5-7B-Instruct",
         embedding_model: str = "pritamdeka/S-PubMedBert-MS-MARCO",
         persist_dir: Optional[str] = None,
         use_llm: bool = True,
@@ -125,11 +125,21 @@ class BiomedicalRAGAgent:
             return
 
         try:
-            from transformers import pipeline
+            from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+            logger.info(f"Loading LLM: {self.llm_name}")
+            tokenizer = AutoTokenizer.from_pretrained(
+                self.llm_name, trust_remote_code=True,
+            )
+            model = AutoModelForCausalLM.from_pretrained(
+                self.llm_name,
+                torch_dtype="auto",
+                device_map="auto",
+                trust_remote_code=True,
+            )
             self.llm = pipeline(
                 "text-generation",
-                model=self.llm_name,
-                device_map="auto",
+                model=model,
+                tokenizer=tokenizer,
                 max_new_tokens=128,
                 do_sample=False,
             )

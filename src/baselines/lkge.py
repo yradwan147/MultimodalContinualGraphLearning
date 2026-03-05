@@ -309,6 +309,12 @@ class LKGEWrapper:
 
         current_train_snap = None
         for line in lines:
+            # Stop before Report Result / Final Result summary tables
+            # whose data rows have a different column layout (Time column)
+            # that would corrupt matrix_entries with non-MRR values
+            if "Report Result" in line:
+                break
+
             # Check for table header identifying the training snapshot
             hm = header_pat.search(line)
             if hm and "field_names" not in line:
@@ -322,7 +328,9 @@ class LKGEWrapper:
             if dm and current_train_snap is not None:
                 test_snap = int(dm.group(1))
                 mrr = float(dm.group(2))
-                matrix_entries[(current_train_snap, test_snap)] = mrr
+                # Sanity check: MRR should be in [0, 1]
+                if mrr <= 1.0:
+                    matrix_entries[(current_train_snap, test_snap)] = mrr
 
             # Reset on separator lines between tables
             if line.strip().startswith("+") and line.count("+") >= 3:

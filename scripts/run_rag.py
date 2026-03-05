@@ -132,7 +132,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run RAG agent for KGQA")
     parser.add_argument("--tasks-dir", default="data/benchmark/tasks")
     parser.add_argument("--task-names", nargs="+", default=None)
-    parser.add_argument("--llm", default="meta-llama/Meta-Llama-3-8B-Instruct",
+    parser.add_argument("--llm", default="Qwen/Qwen2.5-7B-Instruct",
                         help="HuggingFace LLM model ID")
     parser.add_argument("--embedding-model",
                         default="pritamdeka/S-PubMedBert-MS-MARCO")

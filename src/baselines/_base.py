@@ -226,12 +226,17 @@ def evaluate_link_prediction(
     device: str = "cpu",
     batch_size: int = 256,
     all_known_mapped_triples: torch.Tensor | None = None,
+    max_test_triples: int = 50_000,
 ) -> dict[str, float]:
     """Evaluate model on a test set using rank-based metrics.
 
     Computes MRR, Hits@1, Hits@3, Hits@10 using PyKEEN's evaluator
     with filtered ranking (standard protocol). Known true triples are
     excluded from candidate rankings to avoid penalizing valid predictions.
+
+    If the test set exceeds max_test_triples, a random subset is sampled
+    to avoid OOM/segfault on very large test sets (e.g. task_0_base with
+    1.6M test triples and 123K entities).
 
     Args:
         model: Trained PyKEEN model.
@@ -240,13 +245,24 @@ def evaluate_link_prediction(
         batch_size: Evaluation batch size.
         all_known_mapped_triples: Concatenated train+val+test triples from
             all tasks for filtered ranking. If None, uses raw ranking.
+        max_test_triples: Maximum test triples to evaluate. Larger sets
+            are randomly subsampled. Default 50K.
 
     Returns:
         Dict with MRR, Hits@1, Hits@3, Hits@10.
     """
     from pykeen.evaluation import RankBasedEvaluator
 
-    _log_mem(f"before eval ({test_factory.num_triples:,} test triples)")
+    mapped_triples = test_factory.mapped_triples
+    if mapped_triples.shape[0] > max_test_triples:
+        logger.warning(
+            f"Test set has {mapped_triples.shape[0]:,} triples, "
+            f"sampling {max_test_triples:,} for evaluation"
+        )
+        indices = torch.randperm(mapped_triples.shape[0])[:max_test_triples]
+        mapped_triples = mapped_triples[indices]
+
+    _log_mem(f"before eval ({mapped_triples.shape[0]:,} test triples)")
     model = model.to(device)
     model.eval()
     evaluator = RankBasedEvaluator()
@@ -257,7 +273,7 @@ def evaluate_link_prediction(
 
     results = evaluator.evaluate(
         model=model,
-        mapped_triples=test_factory.mapped_triples.to(device),
+        mapped_triples=mapped_triples.to(device),
         additional_filter_triples=filter_triples,
         batch_size=batch_size,
     )

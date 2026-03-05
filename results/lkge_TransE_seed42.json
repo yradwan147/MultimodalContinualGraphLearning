@@ -1,0 +1,203 @@
+{
+  "method": "lkge",
+  "model": "TransE",
+  "task_names": [
+    "task_1_disease_related",
+    "task_1_drug_related",
+    "task_2_disease_related",
+    "task_2_gene_protein",
+    "task_3_gene_protein",
+    "task_3_phenotype_related",
+    "task_4_biological_process",
+    "task_4_phenotype_related",
+    "task_5_anatomy_pathway"
+  ],
+  "seeds": [
+    42
+  ],
+  "results": [
+    {
+      "per_snapshot": {
+        "0": {
+          "Whole_MRR": 0.141,
+          "Whole_Hits@1": 0.001,
+          "Whole_Hits@3": 0.226,
+          "Whole_Hits@10": 0.403
+        },
+        "1": {
+          "Whole_MRR": 0.021,
+          "Whole_Hits@1": 0.001,
+          "Whole_Hits@3": 0.029,
+          "Whole_Hits@10": 0.055
+        },
+        "2": {
+          "Whole_MRR": 0.014,
+          "Whole_Hits@1": 0.001,
+          "Whole_Hits@3": 0.018,
+          "Whole_Hits@10": 0.035
+        },
+        "3": {
+          "Whole_MRR": 0.038,
+          "Whole_Hits@1": 0.009,
+          "Whole_Hits@3": 0.028,
+          "Whole_Hits@10": 0.091
+        },
+        "4": {
+          "Whole_MRR": 0.023,
+          "Whole_Hits@1": 0.006,
+          "Whole_Hits@3": 0.018,
+          "Whole_Hits@10": 0.048
+        },
+        "5": {
+          "Whole_MRR": 0.023,
+          "Whole_Hits@1": 0.005,
+          "Whole_Hits@3": 0.019,
+          "Whole_Hits@10": 0.05
+        },
+        "6": {
+          "Whole_MRR": 0.024,
+          "Whole_Hits@1": 0.006,
+          "Whole_Hits@3": 0.022,
+          "Whole_Hits@10": 0.051
+        },
+        "7": {
+          "Whole_MRR": 0.022,
+          "Whole_Hits@1": 0.005,
+          "Whole_Hits@3": 0.02,
+          "Whole_Hits@10": 0.046
+        },
+        "8": {
+          "Whole_MRR": 0.016,
+          "Whole_Hits@1": 0.004,
+          "Whole_Hits@3": 0.012,
+          "Whole_Hits@10": 0.033
+        }
+      },
+      "matrix_entries": {
+        "0__": 0.1414,
+        "1__": 0.0042,
+        "2__": 0.0078,
+        "3__": 0.0406,
+        "4__": 0.005,
+        "5__": 0.1598,
+        "6__": 0.0402,
+        "7__": 0.0118,
+        "8__": 0.0309
+      },
+      "results_matrix": [
+        [
+          0.1414,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.1432,
+          0.0042,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.1447,
+          0.0028,
+          0.0078,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.1448,
+          0.0022,
+          0.0077,
+          0.0406,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.1459,
+          0.0015,
+          0.0032,
+          0.0248,
+          0.005,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.1368,
+          0.0015,
+          0.0032,
+          0.0227,
+          0.0049,
+          0.1598,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.1365,
+          0.0014,
+          0.0034,
+          0.0227,
+          0.0026,
+          0.1502,
+          0.0402,
+          0.0,
+          0.0
+        ],
+        [
+          0.1383,
+          0.0015,
+          0.003,
+          0.021,
+          0.0024,
+          0.1506,
+          0.0347,
+          0.0118,
+          0.0
+        ],
+        [
+          0.1351,
+          0.0015,
+          0.0039,
+          0.0001,
+          0.0006,
+          0.1435,
+          0.0151,
+          0.0084,
+          0.0309
+        ]
+      ],
+      "transfer": {
+        "forward_transfer": 0.00017500000000000003,
+        "backward_transfer": -0.012825
+      },
+      "num_training_logs": 404,
+      "raw_log": "2026-03-03 17:01:40,779: Namespace(snapshot_num=9, dataset='lkge_format', gpu=0, loss_name='Margin', train_new=True, skip_previous='False', lifelong_name='LKGE', optimizer_name='Adam', embedding_model='TransE', epoch_num=100, margin=8.0, batch_size=2048, learning_rate=0.0001, emb_dim=50, l2=0.0, neg_ratio=10, patience=3, regular_weight=0.01, reconstruct_weight=0.1, using_regular_loss='True', using_reconstruct_loss='True', using_embedding_transfer='False', using_finetune='True', save_path='/home/radwany/mcgl/results/lkge_checkpoints/lkge_format-TransE-LKGE-Margin-WO_transfer', data_path='/home/radwany/mcgl/results/lkge_format/', log_path='/home/radwany/mcgl/results/lkge_logs/20260303/lkge_format-TransE-LKGE-Margin-WO_embedding_transfer', num_layer=1, num_workers=1, valid_metrics='mrr', valid=True, note='', seed=42, logger=<RootLogger root (INFO)>, device=device(type='cuda', index=0))\nStart Training ===============================>\n2026-03-03 17:07:06,751: Snapshot:0\tEpoch:0\tLoss:11.574\tMRR:0.12\tHits@10:0.12\tBest:0.12\n2026-03-03 17:07:08,795: Snapshot:0\tEpoch:1\tLoss:11.376\tMRR:0.13\tHits@10:0.15\tBest:0.13\n2026-03-03 17:07:11,060: Snapshot:0\tEpoch:2\tLoss:11.194\tMRR:0.15\tHits@10:0.21\tBest:0.15\n2026-03-03 17:07:13,300: Snapshot:0\tEpoch:3\tLoss:11.013\tMRR:0.17\tHits@10:0.24\tBest:0.17\n2026-03-03 17:07:15,433: Snapshot:0\tEpoch:4\tLoss:10.836\tMRR:0.19\tHits@10:0.29\tBest:0.19\n2026-03-03 17:07:17,705: Snapshot:0\tEpoch:5\tLoss:10.658\tMRR:0.21\tHits@10:0.38\tBest:0.21\n2026-03-03 17:07:19,959: Snapshot:0\tEpoch:6\tLoss:10.487\tMRR:0.24\tHits@10:0.43\tBest:0.24\n2026-03-03 17:07:22,218: Snapshot:0\tEpoch:7\tLoss:10.317\tMRR:0.28\tHits@10:0.51\tBest:0.28\n2026-03-03 17:07:24,495: Snapshot:0\tEpoch:8\tLoss:10.143\tMRR:0.31\tHits@10:0.57\tBest:0.31\n2026-03-03 17:07:26,746: Snapshot:0\tEpoch:9\tLoss:9.974\tMRR:0.35\tHits@10:0.62\tBest:0.35\n2026-03-03 17:07:29,011: Snapshot:0\tEpoch:10\tLoss:9.805\tMRR:0.39\tHits@10:0.68\tBest:0.39\n2026-03-03 17:07:31,291: Snapshot:0\tEpoch:11\tLoss:9.636\tMRR:0.44\tHits@10:0.84\tBest:0.44\n2026-03-03 17:07:33,595: Snapshot:0\tEpoch:12\tLoss:9.476\tMRR:0.49\tHits@10:1.01\tBest:0.49\n2026-03-03 17:07:35,865: Snapshot:0\tEpoch:13\tLoss:9.311\tMRR:0.54\tHits@10:1.15\tBest:0.54\n2026-03-03 17:07:38,105: Snapshot:0\tEpoch:14\tLoss:9.154\tMRR:0.59\tHits@10:1.32\tBest:0.59\n2026-03-03 17:07:40,357: Snapshot:0\tEpoch:15\tLoss:8.997\tMRR:0.65\tHits@10:1.44\tBest:0.65\n2026-03-03 17:07:42,620: Snapshot:0\tEpoch:16\tLoss:8.84\tMRR:0.71\tHits@10:1.62\tBest:0.71\n2026-03-03 17:07:44,873: Snapshot:0\tEpoch:17\tLoss:8.689\tMRR:0.79\tHits@10:1.78\tBest:0.79\n2026-03-03 17:07:47,120: Snapshot:0\tEpoch:18\tLoss:8.538\tMRR:0.86\tHits@10:2.04\tBest:0.86\n2026-03-03 17:07:49,388: Snapshot:0\tEpoch:19\tLoss:8.395\tMRR:0.95\tHits@10:2.32\tBest:0.95\n2026-03-03 17:07:51,672: Snapshot:0\tEpoch:20\tLoss:8.251\tMRR:1.03\tHits@10:2.63\tBest:1.03\n2026-03-03 17:07:53,923: Snapshot:0\tEpoch:21\tLoss:8.108\tMRR:1.13\tHits@10:2.79\tBest:1.13\n2026-03-03 17:07:56,085: Snapshot:0\tEpoch:22\tLoss:7.98\tMRR:1.24\tHits@10:3.15\tBest:1.24\n2026-03-03 17:07:58,189: Snapshot:0\tEpoch:23\tLoss:7.844\tMRR:1.38\tHits@10:3.54\tBest:1.38\n2026-03-03 17:08:00,432: Snapshot:0\tEpoch:24\tLoss:7.715\tMRR:1.5\tHits@10:3.73\tBest:1.5\n2026-03-03 17:08:02,559: Snapshot:0\tEpoch:25\tLoss:7.595\tMRR:1.62\tHits@10:4.18\tBest:1.62\n2026-03-03 17:08:04,741: Snapshot:0\tEpoch:26\tLoss:7.469\tMRR:1.75\tHits@10:4.41\tBest:1.75\n2026-03-03 17:08:06,987: Snapshot:0\tEpoch:27\tLoss:7.354\tMRR:1.91\tHits@10:4.88\tBest:1.91\n2026-03-03 17:08:09,247: Snapshot:0\tEpoch:28\tLoss:7.237\tMRR:2.07\tHits@10:5.34\tBest:2.07\n2026-03-03 17:08:11,521: Snapshot:0\tEpoch:29\tLoss:7.127\tMRR:2.25\tHits@10:6.07\tBest:2.25\n2026-03-03 17:08:13,784: Snapshot:0\tEpoch:30\tLoss:7.016\tMRR:2.45\tHits@10:6.72\tBest:2.45\n2026-03-03 17:08:16,037: Snapshot:0\tEpoch:31\tLoss:6.911\tMRR:2.65\tHits@10:7.29\tBest:2.65\n2026-03-03 17:08:18,296: Snapshot:0\tEpoch:32\tLoss:6.807\tMRR:2.85\tHits@10:7.66\tBest:2.85\n2026-03-03 17:08:20,608: Snapshot:0\tEpoch:33\tLoss:6.706\tMRR:3.07\tHits@10:8.09\tBest:3.07\n2026-03-03 17:08:22,868: Snapshot:0\tEpoch:34\tLoss:6.607\tMRR:3.3\tHits@10:8.85\tBest:3.3\n2026-03-03 17:08:25,130: Snapshot:0\tEpoch:35\tLoss:6.515\tMRR:3.55\tHits@10:9.64\tBest:3.55\n2026-03-03 17:08:27,389: Snapshot:0\tEpoch:36\tLoss:6.421\tMRR:3.78\tHits@10:10.25\tBest:3.78\n2026-03-03 17:08:29,652: Snapshot:0\tEpoch:37\tLoss:6.335\tMRR:4.06\tHits@10:11.22\tBest:4.06\n2026-03-03 17:08:31,923: Snapshot:0\tEpoch:38\tLoss:6.247\tMRR:4.36\tHits@10:12.28\tBest:4.36\n2026-03-03 17:08:34,182: Snapshot:0\tEpoch:39\tLoss:6.16\tMRR:4.67\tHits@10:13.29\tBest:4.67\n2026-03-03 17:08:36,440: Snapshot:0\tEpoch:40\tLoss:6.077\tMRR:5.01\tHits@10:14.19\tBest:5.01\n2026-03-03 17:08:38,713: Snapshot:0\tEpoch:41\tLoss:5.993\tMRR:5.36\tHits@10:15.35\tBest:5.36\n2026-03-03 17:08:40,985: Snapshot:0\tEpoch:42\tLoss:5.918\tMRR:5.73\tHits@10:16.27\tBest:5.73\n2026-03-03 17:08:43,231: Snapshot:0\tEpoch:43\tLoss:5.843\tMRR:6.07\tHits@10:17.36\tBest:6.07\n2026-03-03 17:08:45,260: Snapshot:0\tEpoch:44\tLoss:5.77\tMRR:6.42\tHits@10:18.64\tBest:6.42\n2026-03-03 17:08:47,500: Snapshot:0\tEpoch:45\tLoss:5.697\tMRR:6.79\tHits@10:19.52\tBest:6.79\n2026-03-03 17:08:49,766: Snapshot:0\tEpoch:46\tLoss:5.626\tMRR:7.17\tHits@10:20.51\tBest:7.17\n2026-03-03 17:08:51,888: Snapshot:0\tEpoch:47\tLoss:5.556\tMRR:7.53\tHits@10:21.73\tBest:7.53\n2026-03-03 17:08:54,108: Snapshot:0\tEpoch:48\tLoss:5.493\tMRR:7.96\tHits@10:22.86\tBest:7.96\n2026-03-03 17:08:56,330: Snapshot:0\tEpoch:49\tLoss:5.427\tMRR:8.36\tHits@10:24.27\tBest:8.36\n2026-03-03 17:08:58,561: Snapshot:0\tEpoch:50\tLoss:5.364\tMRR:8.74\tHits@10:25.4\tBest:8.74\n2026-03-03 17:09:00,802: Snapshot:0\tEpoch:51\tLoss:5.296\tMRR:9.09\tHits@10:26.36\tBest:9.09\n2026-03-03 17:09:03,066: Snapshot:0\tEpoch:52\tLoss:5.24\tMRR:9.44\tHits@10:27.55\tBest:9.44\n2026-03-03 17:09:05,273: Snapshot:0\tEpoch:53\tLoss:5.179\tMRR:9.77\tHits@10:28.26\tBest:9.77\n2026-03-03 17:09:07,506: Snapshot:0\tEpoch:54\tLoss:5.122\tMRR:10.14\tHits@10:29.3\tBest:10.14\n2026-03-03 17:09:09,742: Snapshot:0\tEpoch:55\tLoss:5.062\tMRR:10.44\tHits@10:30.37\tBest:10.44\n2026-03-03 17:09:11,981: Snapshot:0\tEpoch:56\tLoss:5.005\tMRR:10.74\tHits@10:30.9\tBest:10.74\n2026-03-03 17:09:14,217: Snapshot:0\tEpoch:57\tLoss:4.954\tMRR:11.02\tHits@10:31.64\tBest:11.02\n2026-03-03 17:09:16,439: Snapshot:0\tEpoch:58\tLoss:4.9\tMRR:11.27\tHits@10:32.37\tBest:11.27\n2026-03-03 17:09:18,710: Snapshot:0\tEpoch:59\tLoss:4.845\tMRR:11.52\tHits@10:32.9\tBest:11.52\n2026-03-03 17:09:20,944: Snapshot:0\tEpoch:60\tLoss:4.787\tMRR:11.74\tHits@10:33.46\tBest:11.74\n2026-03-03 17:09:23,164: Snapshot:0\tEpoch:61\tLoss:4.745\tMRR:11.95\tHits@10:33.83\tBest:11.95\n2026-03-03 17:09:25,401: Snapshot:0\tEpoch:62\tLoss:4.698\tMRR:12.13\tHits@10:34.39\tBest:12.13\n2026-03-03 17:09:34,970: Snapshot:0\tEpoch:63\tLoss:4.646\tMRR:12.32\tHits@10:34.9\tBest:12.32\n2026-03-03 17:09:37,216: Snapshot:0\tEpoch:64\tLoss:4.598\tMRR:12.43\tHits@10:35.28\tBest:12.43\n2026-03-03 17:09:39,367: Snapshot:0\tEpoch:65\tLoss:4.552\tMRR:12.59\tHits@10:35.72\tBest:12.59\n2026-03-03 17:09:41,633: Snapshot:0\tEpoch:66\tLoss:4.509\tMRR:12.71\tHits@10:36.09\tBest:12.71\n2026-03-03 17:09:43,872: Snapshot:0\tEpoch:67\tLoss:4.469\tMRR:12.81\tHits@10:36.39\tBest:12.81\n2026-03-03 17:09:46,112: Snapshot:0\tEpoch:68\tLoss:4.417\tMRR:12.95\tHits@10:36.72\tBest:12.95\n2026-03-03 17:09:48,365: Snapshot:0\tEpoch:69\tLoss:4.376\tMRR:13.06\tHits@10:37.02\tBest:13.06\n2026-03-03 17:09:50,571: Snapshot:0\tEpoch:70\tLoss:4.335\tMRR:13.12\tHits@10:37.22\tBest:13.12\n2026-03-03 17:09:52,801: Snapshot:0\tEpoch:71\tLoss:4.291\tMRR:13.19\tHits@10:37.5\tBest:13.19\n2026-03-03 17:09:55,052: Snapshot:0\tEpoch:72\tLoss:4.257\tMRR:13.27\tHits@10:37.77\tBest:13.27\n2026-03-03 17:09:57,289: Snapshot:0\tEpoch:73\tLoss:4.211\tMRR:13.31\tHits@10:38.05\tBest:13.31\n2026-03-03 17:09:59,528: Snapshot:0\tEpoch:74\tLoss:4.178\tMRR:13.37\tHits@10:38.3\tBest:13.37\n2026-03-03 17:10:01,759: Snapshot:0\tEpoch:75\tLoss:4.139\tMRR:13.4\tHits@10:38.46\tBest:13.4\n2026-03-03 17:10:04,014: Snapshot:0\tEpoch:76\tLoss:4.1\tMRR:13.47\tHits@10:38.58\tBest:13.47\n2026-03-03 17:10:06,266: Snapshot:0\tEpoch:77\tLoss:4.068\tMRR:13.5\tHits@10:38.72\tBest:13.5\n2026-03-03 17:10:08,514: Snapshot:0\tEpoch:78\tLoss:4.027\tMRR:13.54\tHits@10:38.84\tBest:13.54\n2026-03-03 17:10:10,724: Snapshot:0\tEpoch:79\tLoss:3.989\tMRR:13.59\tHits@10:39.05\tBest:13.59\n2026-03-03 17:10:12,955: Snapshot:0\tEpoch:80\tLoss:3.955\tMRR:13.61\tHits@10:39.08\tBest:13.61\n2026-03-03 17:10:15,190: Snapshot:0\tEpoch:81\tLoss:3.918\tMRR:13.65\tHits@10:39.12\tBest:13.65\n2026-03-03 17:10:17,422: Snapshot:0\tEpoch:82\tLoss:3.883\tMRR:13.68\tHits@10:39.25\tBest:13.68\n2026-03-03 17:10:19,632: Snapshot:0\tEpoch:83\tLoss:3.848\tMRR:13.72\tHits@10:39.25\tBest:13.72\n2026-03-03 17:10:21,647: Snapshot:0\tEpoch:84\tLoss:3.819\tMRR:13.75\tHits@10:39.39\tBest:13.75\n2026-03-03 17:10:23,882: Snapshot:0\tEpoch:85\tLoss:3.782\tMRR:13.8\tHits@10:39.47\tBest:13.8\n2026-03-03 17:10:26,112: Snapshot:0\tEpoch:86\tLoss:3.749\tMRR:13.84\tHits@10:39.61\tBest:13.84\n2026-03-03 17:10:28,211: Snapshot:0\tEpoch:87\tLoss:3.712\tMRR:13.85\tHits@10:39.72\tBest:13.85\n2026-03-03 17:10:30,392: Snapshot:0\tEpoch:88\tLoss:3.677\tMRR:13.85\tHits@10:39.84\tBest:13.85\n2026-03-03 17:10:32,619: Snapshot:0\tEpoch:89\tLoss:3.65\tMRR:13.87\tHits@10:39.91\tBest:13.87\n2026-03-03 17:10:34,865: Snapshot:0\tEpoch:90\tLoss:3.616\tMRR:13.91\tHits@10:40.02\tBest:13.91\n2026-03-03 17:10:37,121: Snapshot:0\tEpoch:91\tLoss:3.585\tMRR:13.97\tHits@10:40.08\tBest:13.97\n2026-03-03 17:10:39,381: Snapshot:0\tEpoch:92\tLoss:3.558\tMRR:13.98\tHits@10:40.05\tBest:13.98\n2026-03-03 17:10:41,611: Snapshot:0\tEpoch:93\tLoss:3.519\tMRR:13.99\tHits@10:40.09\tBest:13.99\n2026-03-03 17:10:43,861: Snapshot:0\tEpoch:94\tLoss:3.493\tMRR:14.03\tHits@10:40.11\tBest:14.03\n2026-03-03 17:10:46,103: Snapshot:0\tEpoch:95\tLoss:3.466\tMRR:14.08\tHits@10:40.31\tBest:14.08\n2026-03-03 17:10:48,287: Snapshot:0\tEpoch:96\tLoss:3.429\tMRR:14.07\tHits@10:40.24\tBest:14.08\n2026-03-03 17:10:50,533: Snapshot:0\tEpoch:97\tLoss:3.402\tMRR:14.09\tHits@10:40.27\tBest:14.09\n2026-03-03 17:10:52,774: Snapshot:0\tEpoch:98\tLoss:3.372\tMRR:14.13\tHits@10:40.3\tBest:14.13\n2026-03-03 17:10:55,001: Snapshot:0\tEpoch:99\tLoss:3.344\tMRR:14.14\tHits@10:40.31\tBest:14.14\n2026-03-03 17:11:03,568: => loading checkpoint '/home/radwany/mcgl/results/lkge_checkpoints/lkge_format-TransE-LKGE-Margin-WO_tra",
+      "seed": 42,
+      "training_time_s": 34273.83381938934,
+      "Average Performance (AP)": 0.037677777777777775,
+      "Average Forgetting (AF)": 0.0133875,
+      "Backward Transfer (BWT)": -0.012825,
+      "Forward Transfer (FWT)": 0.0,
+      "Remembering (REM)": 0.987175
+    }
+  ]
+}

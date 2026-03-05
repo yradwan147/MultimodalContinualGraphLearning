@@ -38,7 +38,6 @@ python scripts/run_baselines.py \
     --device cuda \
     --seeds $SEED \
     --output-dir results \
-    --output-suffix _seed${SEED} \
-    --eval-multihop
+    --output-suffix _seed${SEED}
 
 echo "End: $(date)"
