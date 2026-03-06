@@ -253,6 +253,10 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", default="results")
     parser.add_argument(
+        "--output-suffix", default="",
+        help="Suffix for output filename (e.g. _seed42)",
+    )
+    parser.add_argument(
         "--quick", action="store_true",
         help="Quick mode: dim=64, epochs=3",
     )
@@ -282,7 +286,7 @@ def main() -> None:
         elapsed = time.time() - start
 
         # Save results
-        result_path = output_dir / f"ablation_{ablation_name}.json"
+        result_path = output_dir / f"ablation_{ablation_name}{args.output_suffix}.json"
         # Handle sweep results (dict of lists) vs single ablation (list)
         save_data = {
             "ablation": ablation_name,

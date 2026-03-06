@@ -305,7 +305,7 @@ def _run_baseline(
             seed=seed,
         )
         result = trainer.train(task_seq, entity_to_id, relation_to_id)
-        return result["results_matrix"], None
+        return result["results_matrix"], getattr(trainer, 'model', None)
 
     elif name == "ewc":
         from src.baselines.ewc import EWCTrainer
@@ -320,7 +320,8 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq, entity_to_id, relation_to_id), None
+        R = trainer.train(task_seq, entity_to_id, relation_to_id)
+        return R, getattr(trainer, 'model', None)
 
     elif name == "experience_replay":
         from src.baselines.experience_replay import ReplayTrainer
@@ -336,7 +337,8 @@ def _run_baseline(
             device=args.device,
             seed=seed,
         )
-        return trainer.train(task_seq, entity_to_id, relation_to_id), None
+        R = trainer.train(task_seq, entity_to_id, relation_to_id)
+        return R, getattr(trainer, 'model', None)
 
     else:
         raise ValueError(f"Unknown baseline: {name}")

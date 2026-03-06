@@ -413,11 +413,15 @@ def make_pykeen_score_fn(
 ) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
     """Create a score function from a PyKEEN model.
 
+    Uses direct embedding extraction and manual scoring to bypass
+    PyKEEN's score_hrt() which causes CUDA segfaults with large entity
+    sets. Same approach as the custom evaluate_link_prediction() fix.
+
     Returns a callable that takes (head_ids [B], rel_ids [B]) and returns
     scores [B, num_entities] for all tail entities.
 
     Args:
-        model: Trained PyKEEN model.
+        model: Trained PyKEEN model (TransE or DistMult).
         num_entities: Total number of entities.
         device: Device for computation.
 
@@ -425,9 +429,20 @@ def make_pykeen_score_fn(
         Score function compatible with evaluate_multihop().
     """
     import torch
+    from pykeen.models import TransE as TransEModel
 
+    model = model.to(device)
     model.eval()
-    all_tails = torch.arange(num_entities, device=device)
+
+    # Extract embeddings directly (same as custom eval fix)
+    with torch.no_grad():
+        entity_emb = model.entity_representations[0](indices=None).to(device)
+        relation_emb = model.relation_representations[0](indices=None).to(device)
+
+    is_transe = isinstance(model, TransEModel)
+    p_norm = 1
+    if is_transe and hasattr(model.interaction, "p"):
+        p_norm = model.interaction.p
 
     def score_fn(head_ids: np.ndarray, rel_ids: np.ndarray) -> np.ndarray:
         B = len(head_ids)
@@ -437,12 +452,21 @@ def make_pykeen_score_fn(
         scores = np.zeros((B, num_entities), dtype=np.float32)
         with torch.no_grad():
             for i in range(B):
-                # Build triples: (head_i, rel_i, all_tails)
-                h = heads[i].expand(num_entities)
-                r = rels[i].expand(num_entities)
-                triples = torch.stack([h, r, all_tails], dim=1)
-                s = model.score_hrt(triples).cpu().numpy().flatten()
-                scores[i] = s
+                h_emb = entity_emb[heads[i]]   # [D]
+                r_emb = relation_emb[rels[i]]   # [D]
+
+                if is_transe:
+                    # TransE: -||h + r - t||_p (higher = better)
+                    target = h_emb + r_emb  # [D]
+                    dists = torch.cdist(
+                        target.unsqueeze(0), entity_emb, p=p_norm
+                    ).squeeze(0)  # [num_entities]
+                    scores[i] = -dists.cpu().numpy()
+                else:
+                    # DistMult: h * r * t (dot product)
+                    hr = h_emb * r_emb  # [D]
+                    s = (hr.unsqueeze(0) * entity_emb).sum(dim=-1)  # [num_entities]
+                    scores[i] = s.cpu().numpy()
 
         return scores
 

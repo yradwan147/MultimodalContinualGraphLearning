@@ -9,7 +9,7 @@ We evaluate seven continual learning methods spanning the spectrum from no forge
 \begin{itemize}
     \item \textbf{Naive Sequential:} Fine-tunes on each task sequentially without any forgetting mitigation (lower bound).
     \item \textbf{Joint Training:} Trains on the union of all tasks simultaneously (upper bound for knowledge retention, though not for new knowledge acquisition).
-    \item \textbf{EWC}~\citep{Kirkpatrick2017}: Elastic Weight Consolidation penalizes changes to parameters important for previous tasks via the Fisher information matrix ($\lambda = 400$).
+    \item \textbf{EWC}~\citep{Kirkpatrick2017}: Elastic Weight Consolidation penalizes changes to parameters important for previous tasks via the Fisher information matrix ($\lambda = 10$).
     \item \textbf{Experience Replay}~\citep{Rolnick2019}: Maintains a memory buffer of exemplars from previous tasks and replays them during new task training (buffer size = 10\% of each task).
     \item \textbf{LKGE}~\citep{Cui2023}: A lifelong KG embedding framework with embedding regularization and knowledge distillation, using TransE as the base model.
     \item \textbf{RAG Agent}~\citep{Lewis2020}: A retrieval-augmented generation pipeline that retrieves relevant KG subgraphs and uses Qwen2.5-7B as the language model for KGQA.
@@ -17,10 +17,10 @@ We evaluate seven continual learning methods spanning the spectrum from no forge
 \end{itemize}
 
 \paragraph{Hyperparameters.}
-All KGE-based methods use embedding dimension $d = 128$, learning rate $\eta = 0.001$, batch size 512, and are trained for 100 epochs per task with early stopping (patience 10).
-We use the Adam optimizer with weight decay $10^{-5}$.
-For EWC, $\lambda = 400$; for experience replay, the buffer stores 10\% of each task's training triples.
-CMKL uses a 4-head cross-attention fusion module, modality-specific Fisher matrices, and K-means diverse selection for the multimodal memory buffer.
+All KGE-based methods use embedding dimension $d = 256$, learning rate $\eta = 0.001$, batch size 512, and are trained for 100 epochs per task.
+We use the Adam optimizer.
+For EWC, $\lambda = 10$; for experience replay, the buffer stores 500 exemplars per task with relation-balanced selection.
+CMKL uses a 4-head cross-attention fusion module, modality-specific Fisher matrices, and K-means diverse selection for the multimodal memory buffer (1000 exemplars).
 
 \paragraph{Infrastructure.}
 All experiments are conducted on NVIDIA V100 GPUs (32\,GB) on the KAUST IBEX cluster.
@@ -76,9 +76,11 @@ EWC, Experience Replay, and Naive Sequential perform similarly (AP $\approx$ 0.3
 \subsection{KGQA Results}
 \label{sec:kgqa_results}
 
-The RAG agent using Qwen2.5-7B achieves an overall accuracy of 47.3\% on continual KGQA, with Exact Match\,=\,31.2\% and token-level F1\,=\,52.8\%.
-Performance is stable across temporal snapshots due to the non-parametric retrieval mechanism: answers are generated from the current KG snapshot rather than memorized parameters.
-Questions about newly added entities in $t_1$ are answered with 43.1\% accuracy, compared to 51.7\% for entities present in both snapshots, reflecting the challenge of sparse context for newly introduced knowledge.
+We evaluate the RAG agent (Qwen2.5-7B-Instruct with ChromaDB retrieval) on the link prediction task to provide a non-parametric baseline.
+As shown in \cref{tab:main_results}, RAG achieves AP\,=\,0.002$\pm$0.001, the lowest among all methods.
+This is expected: the LLM-based approach must generate exact entity names from free-text output, a task for which it is not designed.
+However, RAG exhibits near-zero forgetting (AF\,=\,0.001) because retrieval-augmented approaches do not suffer from parametric catastrophic forgetting---the knowledge is stored in the index, not in model weights.
+This establishes RAG as a complementary paradigm: while unsuitable for exhaustive entity ranking, it offers stable performance across temporal snapshots and could serve KGQA tasks where natural language answers are acceptable.
 
 \subsection{Analysis}
 \label{sec:analysis}

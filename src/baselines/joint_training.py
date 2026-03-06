@@ -61,6 +61,7 @@ class JointTrainer:
         self.batch_size = batch_size
         self.device = get_device(device)
         self.seed = seed
+        self.model = None
 
     def train(
         self,
@@ -114,6 +115,7 @@ class JointTrainer:
             random_seed=self.seed,
         )
         model = model.to(self.device)
+        self.model = model
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
 
         logger.info("=== Joint Training ===")

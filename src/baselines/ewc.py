@@ -174,6 +174,7 @@ class EWCTrainer:
         self.fisher_samples = fisher_samples
         self.device = get_device(device)
         self.seed = seed
+        self.model = None
 
     def train(
         self,
@@ -211,6 +212,7 @@ class EWCTrainer:
             random_seed=self.seed,
         )
         model = model.to(self.device)
+        self.model = model
 
         ewc = EWC_KGE(model, lambda_ewc=self.lambda_ewc)
         R = np.zeros((n_tasks, n_tasks))

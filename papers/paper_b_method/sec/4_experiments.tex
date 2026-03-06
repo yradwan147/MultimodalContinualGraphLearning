@@ -18,7 +18,7 @@ We compare against six baselines:
 (4)~\textbf{Experience Replay}~\citep{rolnick2019experience}: maintains a random replay buffer of past triples;
 (5)~\textbf{LKGE}~\citep{cui2023lifelong}: the state-of-the-art continual KGE framework using TransE with combined EWC and replay; and
 (6)~\textbf{RAG} (Qwen2.5-7B)~\citep{lewis2020retrieval}: a retrieval-augmented generation approach that retrieves relevant subgraphs and uses an LLM for link prediction scoring.
-Baselines (1)--(4) use PyKEEN~\citep{ali2021pykeen} with TransE (embedding dim 128).
+Baselines (1)--(4) use PyKEEN~\citep{ali2021pykeen} with TransE (embedding dim 256).
 LKGE uses its own TransE implementation.
 
 \paragraph{Metrics.}
@@ -29,8 +29,8 @@ We report four continual learning metrics computed over the full task sequence:
 \textbf{Remembering (REM)} $= 1 - \text{AF}$, the fraction of peak performance retained.
 
 \paragraph{Implementation Details.}
-\ours uses embedding dimension $D{=}128$, a 2-layer R-GCN with $B{=}30$ basis matrices, frozen BiomedBERT (microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract) with a $768 {\to} 128$ linear projection, a Morgan fingerprint MLP ($1024 {\to} 128 {\to} 128$), 4-head cross-modal attention, and a DistMult decoder~\citep{yang2015embedding}.
-Training uses Adam optimizer with learning rate $10^{-3}$ for 100 epochs per task, batch size 512, and memory buffer size 500.
+\ours uses embedding dimension $D{=}256$, a 2-layer R-GCN with $B{=}30$ basis matrices, frozen BiomedBERT (microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract) with a $768 {\to} 256$ linear projection, a Morgan fingerprint MLP ($1024 {\to} 256 {\to} 256$), 4-head cross-modal attention, and a DistMult decoder~\citep{yang2015embedding}.
+Training uses Adam optimizer with learning rate $10^{-3}$ for 100 epochs per task, batch size 512, and memory buffer size 1000.
 MA-EWC strengths are $\lambda_s{=}10$, $\lambda_t{=}5$, $\lambda_m{=}1$, $\lambda_f{=}5$, with replay weight $\alpha{=}1.0$.
 All experiments use 5 random seeds $\{42, 123, 456, 789, 1024\}$ on NVIDIA V100 GPUs with 32GB memory, reporting mean $\pm$ standard deviation.
 
