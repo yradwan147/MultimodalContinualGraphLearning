@@ -1,0 +1,102 @@
+\section{Benchmark Construction}
+\label{sec:benchmark}
+
+The \ours benchmark is designed to evaluate continual graph learning methods on a real, evolving biomedical knowledge graph.
+We describe the temporal snapshot construction, temporal difference analysis, continual task sequence design, evaluation tasks, and multimodal feature extraction.
+
+\subsection{Temporal Snapshots}
+\label{sec:snapshots}
+
+We construct two temporal snapshots of PrimeKG~\citep{Chandak2023} by querying its upstream biomedical databases at different time points:
+
+\paragraph{Snapshot $t_0$ (June 2021).}
+This corresponds to the original PrimeKG release, downloaded from the Harvard Dataverse.
+It contains 129,375 nodes across 10 entity types and 8,100,498 edges spanning 30 relation types, integrating data from 20+ biomedical databases including DrugBank, DisGeNET, Gene Ontology, HPO, Reactome, and MONDO.
+
+\paragraph{Snapshot $t_1$ (July 2023).}
+We reconstruct PrimeKG by re-querying nine freely accessible upstream databases: Bgee (gene expression), CTD (chemical-disease associations), Gene Ontology, Gene2GO (gene-GO annotations), HPO (phenotype ontology), HPOA (phenotype-disease annotations), MONDO (disease ontology), Uberon (anatomy ontology), and HGNC (gene nomenclature).
+Seven databases with restrictive licensing (DrugBank, UMLS, DrugCentral, SIDER) or API changes (DisGeNET) were not re-queried; for these, we carry forward the $t_0$ edges to ensure the $t_1$ graph is a superset of $t_0$ for the corresponding relation types.
+The resulting $t_1$ snapshot contains 134,211 nodes and 13,041,729 edges across 25 relation types.
+
+\Cref{tab:dataset_stats} summarizes the statistics of both snapshots.
+
+\input{tables/dataset_stats}
+
+\subsection{Temporal Difference}
+\label{sec:temporal_diff}
+
+The temporal difference between $t_0$ and $t_1$ reveals substantial real-world knowledge evolution:
+\begin{itemize}
+    \item \textbf{Added edges:} 5,730,243 new triples appear in $t_1$ that were absent in $t_0$, reflecting newly discovered associations (e.g., new gene-GO annotations, updated disease-phenotype links).
+    \item \textbf{Removed edges:} 889,012 triples present in $t_0$ are absent from $t_1$, representing deprecated or corrected knowledge (e.g., retracted gene-disease associations, updated ontology hierarchies).
+    \item \textbf{Persistent edges:} 7,211,486 triples remain unchanged across both snapshots, providing a stable knowledge backbone.
+\end{itemize}
+
+This temporal difference is fundamentally different from synthetic CGL benchmarks that randomly partition a static graph.
+The additions and removals follow domain-specific patterns: Gene Ontology annotations account for the largest share of added edges (reflecting the rapid expansion of functional annotations), while disease-phenotype associations show high turnover as HPO and MONDO ontologies are refined.
+
+\subsection{Continual Task Sequence}
+\label{sec:task_sequence}
+
+We organize the continual learning task sequence using an \emph{entity-type grouping} strategy.
+Rather than randomly partitioning triples into artificial time steps (as in LKGE~\citep{Cui2023}), we group edges by their head and tail entity types to create semantically coherent tasks.
+Specifically, we define 10 continual tasks based on the dominant entity-type pairs in PrimeKG:
+\begin{enumerate}
+    \item Gene/Protein $\leftrightarrow$ Gene/Protein (protein-protein interactions)
+    \item Gene/Protein $\leftrightarrow$ Biological Process
+    \item Gene/Protein $\leftrightarrow$ Molecular Function
+    \item Gene/Protein $\leftrightarrow$ Cellular Component
+    \item Gene/Protein $\leftrightarrow$ Disease
+    \item Gene/Protein $\leftrightarrow$ Pathway
+    \item Disease $\leftrightarrow$ Phenotype
+    \item Drug $\leftrightarrow$ Disease (drug indications and contraindications)
+    \item Drug $\leftrightarrow$ Side Effect
+    \item Anatomy $\leftrightarrow$ Gene/Protein (tissue expression)
+\end{enumerate}
+
+Each task is presented sequentially at both $t_0$ and $t_1$, requiring the model to first learn the task on $t_0$ data and then adapt to $t_1$ data while retaining knowledge of previously learned tasks.
+This entity-type grouping produces tasks of varying difficulty and size, mirroring the heterogeneous nature of biomedical knowledge evolution.
+
+\subsection{Evaluation Tasks}
+\label{sec:eval_tasks}
+
+\ours supports three evaluation tracks:
+
+\paragraph{Link Prediction (Primary).}
+Given a query $(h, r, ?)$ or $(?, r, t)$, the model ranks all candidate entities.
+We evaluate using Mean Reciprocal Rank (MRR), Hits@$K$ ($K \in \{1, 3, 10\}$), and Area Under the Precision-Recall Curve (AUPRC).
+In the continual setting, we additionally report Average Performance (AP), Average Forgetting (AF), Backward Transfer (BWT), and Remembering (REM), computed across all tasks after training on each new task:
+\begin{align}
+    \text{AP} &= \frac{1}{T} \sum_{i=1}^{T} a_{T,i}, \label{eq:ap} \\
+    \text{AF} &= \frac{1}{T-1} \sum_{i=1}^{T-1} \max_{j \in \{1,\ldots,T-1\}} (a_{j,i} - a_{T,i}), \label{eq:af} \\
+    \text{BWT} &= \frac{1}{T-1} \sum_{i=1}^{T-1} (a_{T,i} - a_{i,i}), \label{eq:bwt} \\
+    \text{REM} &= 1 - \text{AF}, \label{eq:rem}
+\end{align}
+where $a_{j,i}$ denotes the performance on task $i$ after training on task $j$, and $T$ is the total number of tasks.
+
+\paragraph{Knowledge Graph Question Answering (KGQA).}
+We evaluate continual KGQA using a retrieval-augmented generation (RAG) pipeline~\citep{Lewis2020} that retrieves relevant subgraph context from the current KG snapshot and feeds it to an LLM for answer generation.
+We measure Exact Match (EM), token-level F1, and accuracy.
+
+\paragraph{Node Classification.}
+We classify disease nodes into disease categories using node features derived from the KG structure and multimodal attributes.
+We report Macro-F1 and accuracy, along with CL metrics (AP, AF, BWT).
+
+\subsection{Multimodal Features}
+\label{sec:features}
+
+A distinctive feature of \ours is the availability of multimodal node representations:
+
+\paragraph{Textual features.}
+We encode entity descriptions using BiomedBERT~\citep{Gu2021}, a domain-specific language model pre-trained on PubMed abstracts.
+Each node's textual description (e.g., gene function summary, disease definition, drug mechanism of action) is encoded into a 768-dimensional vector using the [CLS] token representation.
+
+\paragraph{Molecular features.}
+For drug nodes with available SMILES strings, we compute 2048-bit Morgan fingerprints~\citep{Rogers2004} (radius 2), capturing circular substructure information relevant to molecular similarity and activity prediction.
+These binary fingerprints are projected to a dense representation via a learned MLP.
+
+\paragraph{Structural features.}
+We extract structural node embeddings using a Relational Graph Convolutional Network (R-GCN)~\citep{Schlichtkrull2018} that captures multi-relational neighborhood information.
+The R-GCN produces type-aware embeddings that reflect each node's local graph context.
+
+These multimodal features enable the study of modality-specific forgetting patterns---a novel research direction that is impossible on existing CGL benchmarks lacking multimodal information.

@@ -1,0 +1,41 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Continual Knowledge Graph Embedding.}
+Continual learning for knowledge graphs has received growing attention as real-world KGs evolve over time.
+LKGE~\citep{cui2023lifelong} provides a modular framework combining embedding models (TransE, DistMult, RotatE) with continual strategies (EWC, experience replay, knowledge distillation), establishing competitive baselines for continual KGE.
+PS-CKGE~\citep{wu2024ps} introduces prototype-guided selective consolidation, identifying parameters critical to past knowledge through entity prototypes.
+IncDE~\citep{song2023incde} handles incremental KG embedding by decomposing entity representations into historical and incremental components.
+Daruna et al.~\citep{daruna2021continual} study continual graph learning for robotics, demonstrating that topology-aware replay selection outperforms random sampling.
+All these methods operate exclusively on graph structure and apply uniform regularization, ignoring the multimodal attributes that modern biomedical KGs provide.
+
+\paragraph{Multimodal Graph Learning.}
+Integrating heterogeneous modalities into graph representations has shown promise across domains.
+MSCGL~\citep{liang2022foundations} explores multimodal fusion for graph-structured data, though without continual learning considerations.
+Recent work on multimodal KG embedding~\citep{liang2022foundations} demonstrates that textual and visual features can complement structural patterns, improving link prediction accuracy.
+However, these methods assume a static graph setting and do not address the catastrophic forgetting problem that arises when the graph evolves.
+\ours bridges this gap by combining multimodal encoding with modality-aware continual learning.
+
+\paragraph{Biomedical Knowledge Graph Reasoning.}
+PrimeKG~\citep{chandak2023building} integrates 20+ biomedical databases into a unified graph with 129K+ nodes and 8.1M+ edges across 10 node types and 30 edge types, providing rich multimodal annotations including textual descriptions and molecular structures.
+TxGNN~\citep{huang2024zero} leverages PrimeKG for zero-shot drug repurposing via graph neural networks, demonstrating the value of multi-relational biomedical reasoning.
+Both approaches treat the KG as static, retraining from scratch when data changes.
+Our work extends biomedical KG reasoning to the continual setting with explicit multimodal awareness.
+
+\paragraph{Elastic Weight Consolidation.}
+EWC~\citep{kirkpatrick2017overcoming} prevents catastrophic forgetting by penalizing changes to parameters that are important for previously learned tasks, as measured by the diagonal of the Fisher information matrix.
+Zenke et al.~\citep{zenke2017continual} propose Synaptic Intelligence (SI), which accumulates parameter importance online during training.
+Li and Hoiem~\citep{li2017learning} introduce Learning without Forgetting (LwF), using knowledge distillation from the previous model as a soft regularizer.
+Standard EWC computes a single Fisher matrix over all parameters; our modality-aware extension maintains separate Fisher matrices per encoder module, enabling heterogeneous regularization.
+
+\paragraph{Experience Replay for Continual Learning.}
+Replay-based methods store and revisit a subset of past examples to mitigate forgetting.
+Rolnick et al.~\citep{rolnick2019experience} show that even a small replay buffer substantially reduces forgetting in deep networks.
+GEM~\citep{lopez2017gradient} and A-GEM~\citep{chaudhry2019efficient} use stored gradients as constraints during optimization.
+For knowledge graphs, BER-style replay~\citep{cui2023lifelong} stores representative triples from previous tasks.
+Our multimodal memory replay extends this by using K-means clustering on structural embeddings to ensure topological diversity in the selected exemplars.
+
+\paragraph{LLMs for Knowledge Graphs.}
+Pan et al.~\citep{pan2024unifying} survey the intersection of large language models and knowledge graphs, identifying opportunities for LLMs to enhance KG completion, question answering, and reasoning.
+Retrieval-augmented generation (RAG)~\citep{lewis2020retrieval} enables LLMs to ground responses in retrieved KG triples, though at the cost of inference-time retrieval latency.
+While LLM-based approaches show promise for KG question answering, they struggle with the structured link prediction tasks that require scoring all candidate entities---a setting where embedding-based methods remain dominant.

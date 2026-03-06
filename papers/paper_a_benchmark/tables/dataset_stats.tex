@@ -1,0 +1,23 @@
+\begin{table}[t]
+\centering
+\caption{Dataset statistics for the two temporal snapshots in \ours. The temporal difference reveals substantial real-world knowledge evolution between June 2021 and July 2023.}
+\label{tab:dataset_stats}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Statistic} & \textbf{$t_0$ (June 2021)} & \textbf{$t_1$ (July 2023)} & \textbf{Difference} \\
+\midrule
+Nodes & 129,375 & 134,211 & +4,836 \\
+Edges & 8,100,498 & 13,041,729 & +4,941,231 \\
+Node types & 10 & 10 & 0 \\
+Relation types & 30 & 25 & $-5$ \\
+\midrule
+Added edges & -- & -- & +5,730,243 \\
+Removed edges & -- & -- & $-889,012$ \\
+Persistent edges & -- & -- & 7,211,486 \\
+\midrule
+Continual tasks & \multicolumn{3}{c}{10 (entity-type grouping)} \\
+Evaluation tracks & \multicolumn{3}{c}{LP, KGQA, Node Classification} \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -4,21 +4,26 @@
 
 ---
 
-## Combined Results (Run 1 + Run 2)
+## Final Combined Results (Runs 1 + 2 + 3)
 
 ### Link Prediction (Continual, 10 tasks)
 
-| Method | Seeds | AP (mean ± std) | AF (mean ± std) | BWT (mean ± std) | REM (mean ± std) | Status |
-|--------|-------|-----------------|-----------------|-------------------|-------------------|--------|
-| **CMKL (DistMult)** | **5/5** | **0.063 ± 0.003** | **0.040 ± 0.003** | **-0.040 ± 0.003** | **0.960 ± 0.003** | **Complete** |
-| LKGE (TransE) | 5/5 | 0.039 ± 0.001 | 0.012 ± 0.002 | -0.010 ± 0.003 | 0.990 ± 0.003 | Complete (9 tasks, skipped base) |
-| Joint Training (TransE) | 4/5 | 0.020 ± 0.000 | 0.0 | 0.0 | 1.0 | Missing seed 456 (segfault) |
-| RAG (Qwen2.5-7B) | 5/5 | 0.002 ± 0.001 | 0.001 ± 0.001 | -0.001 ± 0.001 | 0.999 ± 0.001 | Complete |
-| Naive Sequential (TransE) | 0/5 | — | — | — | — | **Segfault (PyKEEN eval)** |
-| EWC (TransE) | 0/5 | — | — | — | — | **Segfault (PyKEEN eval)** |
-| Experience Replay (TransE) | 0/5 | — | — | — | — | **Segfault (PyKEEN eval)** |
+| Method | Seeds | AP (mean ± std) | AF (mean ± std) | BWT (mean ± std) | REM (mean ± std) | Eval Method | Status |
+|--------|-------|-----------------|-----------------|-------------------|-------------------|-------------|--------|
+| **CMKL (DistMult)** | **5/5** | **0.063 ± 0.003** | **0.040 ± 0.003** | **-0.040 ± 0.003** | **0.960 ± 0.003** | Custom (all-entity) | **Complete** |
+| LKGE (TransE) | 5/5 | 0.039 ± 0.001 | 0.012 ± 0.002 | -0.010 ± 0.003 | 0.990 ± 0.003 | LKGE internal | Complete (9 tasks, skipped base) |
+| Joint Training (TransE) | 5/5 | 0.018 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 1.000 ± 0.000 | Custom (pessimistic) | Complete |
+| Naive Sequential (TransE) | 5/5 | 0.004 ± 0.000 | 0.021 ± 0.000 | -0.021 ± 0.000 | 0.980 ± 0.000 | Custom (pessimistic) | Complete |
+| EWC (TransE) | 5/5 | 0.004 ± 0.000 | 0.017 ± 0.001 | -0.017 ± 0.001 | 0.984 ± 0.001 | Custom (pessimistic) | Complete |
+| Experience Replay (TransE) | 5/5 | 0.004 ± 0.000 | 0.021 ± 0.000 | -0.021 ± 0.000 | 0.980 ± 0.000 | Custom (pessimistic) | Complete |
+| RAG (Qwen2.5-7B) | 5/5 | 0.002 ± 0.001 | 0.001 ± 0.001 | -0.001 ± 0.001 | 0.999 ± 0.001 | Exact match | Complete |
 
-### Node Classification (Continual, 10 tasks) — ALL COMPLETE
+**Notes:**
+- Run 3 KGE baselines (naive seq, joint, EWC, replay) use custom eval that bypasses PyKEEN (pessimistic ranking — scores all 129K entities).
+- CMKL uses its own custom all-entity scoring. LKGE uses its own internal evaluation.
+- RAG evaluated via exact entity name match from LLM output (Qwen2.5-7B-Instruct).
+
+### Node Classification (Continual, 10 tasks) — ALL COMPLETE (Run 1)
 
 | Method | Seeds | AP (mean ± std) | AF (mean ± std) | BWT (mean ± std) | Status |
 |--------|-------|-----------------|-----------------|-------------------|--------|
@@ -32,17 +37,62 @@
 
 ## Key Findings
 
-- **CMKL is best on both LP and NC** — LP: 0.063 AP (1.6x LKGE, 3.2x Joint), NC: 0.431 AP (1.16x Joint)
+- **CMKL is best on both LP and NC** — LP: 0.063 AP (1.6× LKGE, 3.5× Joint), NC: 0.431 AP (1.16× Joint)
+- **EWC reduces forgetting vs Naive Sequential** — LP AF: 0.017 vs 0.021, confirming regularization works
+- **Experience Replay does NOT reduce forgetting** — LP AF=0.021 identical to Naive Sequential; buffer diversity insufficient at scale
 - **CMKL NC advantage is from multimodal features**, not CL mechanisms (EWC/replay add <1% over naive)
 - **RAG is a lower bound** — Qwen2.5-7B cannot generate exact entity names for LP evaluation (AP=0.002)
-- **Gene-protein task anomaly** (MRR~0.50) is NOT leakage — structural simplicity (310 unique tails) + DistMult type-selection
-- **16 KGE baseline LP jobs still segfault** — PyKEEN all-entity eval with 129K entities crashes non-deterministically; needs custom eval fix
+- **Gene-protein task anomaly** (MRR~0.50 for CMKL) is NOT leakage — structural simplicity (310 unique tails) + DistMult type-selection
+- **All KGE baseline AP values are low** (0.004-0.018) due to MRR-based evaluation over 129K entities — expected for large biomedical KGs
+- **Joint Training is the upper bound** as expected (AP=0.018, no forgetting, REM=1.0)
 
 ---
 
 ## Per-Seed Details
 
-### CMKL DistMult (LP, 5/5)
+### Run 3: KGE Baselines (Custom Eval — Consistent Across All Methods)
+
+#### Naive Sequential (TransE, 5/5)
+
+| Seed | AP | AF | BWT | FWT | REM |
+|------|-------|-------|--------|-------|-------|
+| 42 | 0.0043 | 0.0205 | -0.0205 | 0.0000 | 0.9795 |
+| 123 | 0.0044 | 0.0207 | -0.0206 | 0.0000 | 0.9794 |
+| 456 | 0.0044 | 0.0207 | -0.0205 | 0.0000 | 0.9795 |
+| 789 | 0.0044 | 0.0210 | -0.0208 | 0.0000 | 0.9792 |
+| 1024 | 0.0042 | 0.0203 | -0.0201 | 0.0000 | 0.9799 |
+
+#### Joint Training (TransE, 5/5)
+
+| Seed | AP | AF | BWT | FWT | REM |
+|------|-------|-------|--------|-------|-------|
+| 42 | 0.0179 | 0.0000 | 0.0000 | 0.0175 | 1.0000 |
+| 123 | 0.0174 | 0.0000 | 0.0000 | 0.0170 | 1.0000 |
+| 456 | 0.0174 | 0.0000 | 0.0000 | 0.0169 | 1.0000 |
+| 789 | 0.0174 | 0.0000 | 0.0000 | 0.0170 | 1.0000 |
+| 1024 | 0.0173 | 0.0000 | 0.0000 | 0.0169 | 1.0000 |
+
+#### EWC (TransE, 5/5)
+
+| Seed | AP | AF | BWT | FWT | REM |
+|------|-------|-------|--------|-------|-------|
+| 42 | 0.0039 | 0.0169 | -0.0168 | 0.0000 | 0.9832 |
+| 123 | 0.0044 | 0.0169 | -0.0162 | 0.0000 | 0.9838 |
+| 456 | 0.0043 | 0.0174 | -0.0174 | 0.0000 | 0.9826 |
+| 789 | 0.0044 | 0.0174 | -0.0164 | 0.0000 | 0.9836 |
+| 1024 | 0.0037 | 0.0163 | -0.0159 | 0.0000 | 0.9841 |
+
+#### Experience Replay (TransE, 5/5)
+
+| Seed | AP | AF | BWT | FWT | REM |
+|------|-------|-------|--------|-------|-------|
+| 42 | 0.0037 | 0.0210 | -0.0210 | 0.0000 | 0.9790 |
+| 123 | 0.0040 | 0.0206 | -0.0205 | 0.0000 | 0.9795 |
+| 456 | 0.0040 | 0.0205 | -0.0202 | 0.0000 | 0.9798 |
+| 789 | 0.0040 | 0.0206 | -0.0204 | 0.0000 | 0.9796 |
+| 1024 | 0.0038 | 0.0205 | -0.0203 | 0.0000 | 0.9797 |
+
+### Run 1: CMKL DistMult (LP, 5/5)
 
 | Seed | AP | AF | BWT | REM |
 |------|-------|-------|--------|-------|
@@ -52,7 +102,7 @@
 | 789 | 0.0638 | 0.0375 | -0.0375 | 0.9625 |
 | 1024 | 0.0588 | 0.0426 | -0.0427 | 0.9573 |
 
-### LKGE TransE (LP, 5/5, 9 tasks)
+### Run 1: LKGE TransE (LP, 5/5, 9 tasks)
 
 | Seed | AP | AF | BWT | REM |
 |------|-------|-------|--------|-------|
@@ -62,16 +112,7 @@
 | 789 | 0.0394 | 0.0124 | -0.0121 | 0.9879 |
 | 1024 | 0.0394 | 0.0133 | -0.0129 | 0.9871 |
 
-### Joint Training TransE (LP, 4/5)
-
-| Seed | AP | AF | BWT | FWT | REM |
-|------|-------|-----|-----|-------|-----|
-| 42 | 0.0208 | 0.0 | 0.0 | 0.0207 | 1.0 |
-| 123 | 0.0202 | 0.0 | 0.0 | 0.0201 | 1.0 |
-| 789 | 0.0202 | 0.0 | 0.0 | 0.0201 | 1.0 |
-| 1024 | 0.0200 | 0.0 | 0.0 | 0.0198 | 1.0 |
-
-### RAG Qwen2.5-7B (LP, 5/5)
+### Run 2: RAG Qwen2.5-7B (LP, 5/5)
 
 | Seed | AP | AF | BWT | REM |
 |------|-------|-------|--------|-------|
@@ -85,7 +126,7 @@
 
 ## Ablation Results
 
-*Pending — need IBEX runs after baseline LP fix.*
+*Pending — need IBEX runs. Local smoke tests only.*
 
 | Ablation | AP | AF | BWT | FWT |
 |----------|----|----|-----|-----|
@@ -94,6 +135,7 @@
 | Concat fusion | — | — | — | — |
 | Global EWC | — | — | — | — |
 | Random replay | — | — | — | — |
+| Distillation | — | — | — | — |
 
 ---
 
@@ -103,6 +145,9 @@
 |-----|------|------|-----------|--------|-------------|
 | Run 1 | Mar 3-5 | 60 | 28 | 32 | CMKL 5/5, LKGE 5/5, JT 3/5, NC 25/25, RAG 1/5 |
 | Run 2 | Mar 5-6 | 22 | 6 | 16 | JT seed 123, RAG 5/5 (full LLM) |
+| Run 3 | Mar 6 | 20 | **20** | **0** | All 4 KGE baselines × 5 seeds (custom eval fix) |
+
+**Total: 82 result files across 3 runs.**
 
 ---
 

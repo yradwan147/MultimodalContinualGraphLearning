@@ -1,0 +1,15 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We introduced \ours, the first continual graph learning benchmark grounded in a real biomedical knowledge graph with genuine temporal evolution.
+Built on PrimeKG with two temporal snapshots reconstructed from nine authoritative databases, \ours provides 129K+ nodes, 8.1M+ edges, 10 continual learning tasks, multimodal node features, and three evaluation tracks.
+Our evaluation of seven methods reveals that multimodal-aware continual learning (CMKL) substantially outperforms traditional approaches, achieving 3.5$\times$ the average performance of Joint Training, while EWC provides meaningful forgetting reduction in the biomedical domain.
+
+\paragraph{Limitations.}
+Our benchmark currently spans two temporal snapshots ($t_0$ and $t_1$); a third snapshot ($t_2$, February 2026) is planned but not yet integrated, and additional snapshots would better characterize long-term knowledge evolution.
+Seven upstream databases with restrictive licensing (e.g., DrugBank, UMLS) could not be re-queried for $t_1$, and their inclusion would enrich the temporal dynamics---particularly for drug-related relation types.
+The evaluation methodology differs across methods: KGE-based methods use all-entity ranking while the RAG agent performs targeted QA, making direct AP comparison across all seven methods imperfect.
+Finally, the gene/protein type dominates the graph (73\% of triples), and future versions should explore strategies to mitigate this type imbalance.
+
+\paragraph{Future work.}
+Promising directions include: (1) integrating licensed databases (DrugBank, UMLS) for richer drug-disease temporal dynamics; (2) multi-hop reasoning tasks that leverage PrimeKG's rich relational structure; (3) extending to inductive continual learning where entirely new entity types appear across snapshots; and (4) exploring foundation model approaches for continual biomedical KG learning, building on the complementarity of KGs and LLMs~\citep{Pan2024}.

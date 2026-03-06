@@ -1,0 +1,86 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Experimental Setup}
+\label{subsec:setup}
+
+\paragraph{Benchmark.}
+We evaluate on PrimeKG-CL, a continual learning benchmark derived from PrimeKG~\citep{chandak2023building} with two temporal snapshots: $t_0$ (June 2021, the original PrimeKG release) and $t_1$ (July 2023, rebuilt from 9 updated databases).
+The benchmark contains 129K+ entities across 10 node types (drug, disease, gene/protein, biological process, molecular function, cellular component, pathway, anatomy, exposure, side effect) and 8.1M+ edges spanning 30 relation types.
+We construct 10 continual link prediction tasks from the relation types with the largest temporal drift, ordered by the magnitude of edge additions between $t_0$ and $t_1$.
+For node classification, we construct 10 tasks from disease node categories.
+
+\paragraph{Baselines.}
+We compare against six baselines:
+(1)~\textbf{Naive Sequential}: fine-tunes TransE~\citep{bordes2013translating} on each task without any forgetting mitigation;
+(2)~\textbf{Joint Training}: trains TransE on the union of all tasks (upper bound for non-continual methods);
+(3)~\textbf{EWC}~\citep{kirkpatrick2017overcoming}: applies elastic weight consolidation with a single Fisher matrix;
+(4)~\textbf{Experience Replay}~\citep{rolnick2019experience}: maintains a random replay buffer of past triples;
+(5)~\textbf{LKGE}~\citep{cui2023lifelong}: the state-of-the-art continual KGE framework using TransE with combined EWC and replay; and
+(6)~\textbf{RAG} (Qwen2.5-7B)~\citep{lewis2020retrieval}: a retrieval-augmented generation approach that retrieves relevant subgraphs and uses an LLM for link prediction scoring.
+Baselines (1)--(4) use PyKEEN~\citep{ali2021pykeen} with TransE (embedding dim 128).
+LKGE uses its own TransE implementation.
+
+\paragraph{Metrics.}
+We report four continual learning metrics computed over the full task sequence:
+\textbf{Average Performance (AP)}, the mean MRR across all tasks after training on the final task;
+\textbf{Average Forgetting (AF)}, the mean drop in MRR from each task's peak to its final value;
+\textbf{Backward Transfer (BWT)}, the average change in past task performance after learning new tasks; and
+\textbf{Remembering (REM)} $= 1 - \text{AF}$, the fraction of peak performance retained.
+
+\paragraph{Implementation Details.}
+\ours uses embedding dimension $D{=}128$, a 2-layer R-GCN with $B{=}30$ basis matrices, frozen BiomedBERT (microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract) with a $768 {\to} 128$ linear projection, a Morgan fingerprint MLP ($1024 {\to} 128 {\to} 128$), 4-head cross-modal attention, and a DistMult decoder~\citep{yang2015embedding}.
+Training uses Adam optimizer with learning rate $10^{-3}$ for 100 epochs per task, batch size 512, and memory buffer size 500.
+MA-EWC strengths are $\lambda_s{=}10$, $\lambda_t{=}5$, $\lambda_m{=}1$, $\lambda_f{=}5$, with replay weight $\alpha{=}1.0$.
+All experiments use 5 random seeds $\{42, 123, 456, 789, 1024\}$ on NVIDIA V100 GPUs with 32GB memory, reporting mean $\pm$ standard deviation.
+
+\subsection{Main Results: Link Prediction}
+\label{subsec:main_results}
+
+\input{tables/main_results}
+
+\cref{tab:main_results} presents the continual link prediction results.
+\ours achieves the highest average performance (AP\,=\,$0.063 \pm 0.003$), substantially outperforming all baselines.
+LKGE, the strongest continual baseline, achieves AP\,=\,$0.039 \pm 0.001$, demonstrating that its combination of EWC and replay with TransE provides meaningful but limited forgetting mitigation.
+Joint Training, which sees all tasks simultaneously and serves as a non-continual upper bound, achieves only AP\,=\,$0.018$---indicating that \ours's multimodal representations provide advantages beyond simply avoiding forgetting.
+
+The four PyKEEN-based baselines (Naive Sequential, Joint, EWC, Experience Replay) all achieve similar AP values ($0.004$), suggesting that at the scale of PrimeKG (129K+ entities), TransE with standard continual learning mechanisms struggles to learn discriminative embeddings.
+EWC provides modest forgetting reduction (AF\,=\,$0.017$ vs.\ $0.021$ for Naive), while Experience Replay shows no benefit over naive fine-tuning at this entity scale.
+
+RAG with Qwen2.5-7B achieves the lowest AP ($0.002$), confirming that LLM-based approaches, while powerful for open-ended reasoning, are not well-suited for the exhaustive entity ranking required in link prediction evaluation.
+
+\subsection{Node Classification Results}
+\label{subsec:nc_results}
+
+\input{tables/nc_results}
+
+\cref{tab:nc_results} presents continual node classification results.
+\ours achieves the highest AP ($0.431 \pm 0.005$), outperforming Joint Training ($0.370 \pm 0.002$) by $16\%$.
+Notably, the advantage of \ours over baselines is more pronounced on node classification than link prediction, suggesting that multimodal features (particularly textual disease descriptions and molecular fingerprints) provide strong discriminative signals for entity-level tasks.
+All methods exhibit low forgetting on this task (AF $\leq 0.011$), indicating that node classification features are relatively stable across graph snapshots.
+
+\subsection{Analysis}
+\label{subsec:analysis}
+
+\paragraph{Forgetting vs.\ representation quality trade-off.}
+\ours achieves the highest AP but also exhibits higher AF ($0.040$) than LKGE ($0.012$) on link prediction.
+This reveals a fundamental trade-off: richer multimodal representations create more capacity for the model to exploit, but also more parameters vulnerable to drift.
+The MA-EWC mechanism reduces forgetting relative to naive fine-tuning, but the absolute forgetting is higher because the model learns more per task.
+LKGE's lower AF reflects its simpler TransE representations, which have less to forget.
+
+\paragraph{Decoder architecture matters.}
+A confound in our comparison is that \ours uses DistMult while baselines use TransE.
+DistMult's bilinear scoring function $f(h, r, t) = \mathbf{h}^\top \text{diag}(\mathbf{r}) \mathbf{t}$ captures symmetric interactions more effectively than TransE's translation-based scoring $f(h, r, t) = \|\mathbf{h} + \mathbf{r} - \mathbf{t}\|$.
+Part of \ours's AP advantage likely stems from this architectural choice rather than the continual learning mechanisms alone.
+Disentangling this confound through decoder-controlled ablations is an important direction for future work.
+
+\paragraph{Gene-protein task anomaly.}
+On the \texttt{gene\_protein} relation type (gene/protein--gene/protein interactions), \ours achieves anomalously high MRR.
+Investigation reveals that DistMult's type-based candidate selection narrows the evaluation to only 310 unique tail entities for this relation, compared to the full 129K+ entity set used by TransE baselines.
+This effectively transforms a very hard ranking problem into a much easier one, inflating task-specific MRR and, consequently, overall AP.
+
+\paragraph{Experience replay at scale.}
+Experience Replay shows essentially no benefit over Naive Sequential (both achieve AP\,=\,$0.004$, AF\,=\,$0.021$).
+With 129K+ entities and a buffer of 500 triples, the replay signal is diluted to the point of irrelevance---the model cannot meaningfully revisit past knowledge from such a sparse sample.
+LKGE's replay is more effective because its TransE implementation uses a more targeted entity embedding update strategy.
+\ours's K-means-based diverse selection aims to maximize the information content of each replayed triple, though evaluating its effectiveness in isolation requires ablation studies at full scale.

@@ -1,92 +1,59 @@
-% Paper B: CMKL - Continual Multimodal KG Learner
-% Target venues: ICML, NeurIPS, KDD, WWW
+% Paper B: CMKL - Continual Multimodal Knowledge Graph Learner
+% Target venue: NeurIPS 2025
 
 \documentclass{article}
 
-% TODO: Replace with venue-specific style (e.g., \usepackage{neurips_2026})
+\usepackage[preprint]{neurips_2025}
+
+% Standard packages
 \usepackage[utf8]{inputenc}
-\usepackage{amsmath,amssymb}
-\usepackage{graphicx}
+\usepackage[T1]{fontenc}
 \usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{multirow}
+\usepackage{amssymb}
+\usepackage{pifont}
+\usepackage{amsmath}
 \usepackage{hyperref}
+\usepackage{url}
 \usepackage{natbib}
 \usepackage{algorithm}
 \usepackage{algorithmic}
+\usepackage{xspace}
+\usepackage{cleveref}
 
-\title{CMKL: Modality-Aware Continual Learning \\
+% Custom commands
+\newcommand{\cmark}{\ding{51}}
+\newcommand{\xmark}{\ding{55}}
+\newcommand{\ours}{CMKL\xspace}
+\newcommand{\fullname}{Continual Multimodal Knowledge Graph Learner\xspace}
+
+\title{\ours: Modality-Aware Continual Learning \\
 for Evolving Biomedical Knowledge Graphs}
 
 \author{
-  Author Names \\
-  KAUST \\
-  \texttt{email@kaust.edu.sa}
+  Yousef A.\ Radwan \\
+  King Abdullah University of Science and Technology (KAUST) \\
+  Thuwal, Saudi Arabia \\
+  \texttt{yousef.radwan@kaust.edu.sa}
 }
 
 \begin{document}
 
 \maketitle
 
-\begin{abstract}
-% TODO: Write abstract after experiments are complete
-Abstract placeholder. We propose CMKL, the first method to address
-modality-specific forgetting in continual knowledge graph learning.
-CMKL uses modality-aware regularization and multimodal memory replay
-to leverage complementary information across structural, textual,
-and molecular modalities.
-\end{abstract}
+\input{sec/0_abstract}
+\input{sec/1_intro}
+\input{sec/2_related}
+\input{sec/3_method}
+\input{sec/4_experiments}
+\input{sec/5_conclusion}
 
-% Section 1: Introduction (1 page)
-\section{Introduction}
-\label{sec:intro}
-% Core challenge of continual multimodal biomedical KG reasoning
-% Gap: no existing method handles modality-specific forgetting
-
-% Section 2: Related Work (1 page)
-\section{Related Work}
-\label{sec:related}
-% CKGE methods (EWC, LKGE, BER)
-% Multimodal graph learning (MSCGL, MoDE)
-% Biomedical KG reasoning
-
-% Section 3: Problem Formulation (0.5 page)
-\section{Problem Formulation}
-\label{sec:problem}
-% Formal definition of continual multimodal KG learning
-
-% Section 4: Method (2.5 pages)
-\section{CMKL: Continual Multimodal KG Learner}
-\label{sec:method}
-
-\subsection{Modality-Specific Encoders}
-% R-GCN (structural), BiomedBERT (textual), Morgan FP MLP (molecular)
-
-\subsection{Cross-Modal Attention Fusion}
-% Bidirectional cross-attention, residual connections
-
-\subsection{Modality-Aware EWC}
-% Per-modality Fisher matrices, per-modality lambda values
-
-\subsection{Multimodal Memory Replay}
-% K-means diverse selection, embedding storage
-
-% Section 5: Experiments (2 pages)
-\section{Experiments}
-\label{sec:experiments}
-% Setup, main results vs. baselines, ablation studies
-
-% Section 6: Analysis (1 page)
-\section{Analysis}
-\label{sec:analysis}
-% Inter-modal vs. intra-modal forgetting
-% Modality complementarity analysis
-% Per-modality Fisher visualization
-
-% Section 7: Conclusion (0.5 page)
-\section{Conclusion}
-\label{sec:conclusion}
-% Summary, limitations, future work
-
-\bibliographystyle{plainnat}
-\bibliography{references}
+\bibliographystyle{unsrt}
+\bibliography{refs}
 
 \end{document}

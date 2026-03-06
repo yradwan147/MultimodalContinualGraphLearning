@@ -1,84 +1,56 @@
-% Paper A: Temporal Multimodal Biomedical KG Benchmark for Continual Learning
-% Target venues: NeurIPS Datasets & Benchmarks, Nature Scientific Data, WWW
-
 \documentclass{article}
 
-% TODO: Replace with venue-specific style (e.g., \usepackage{neurips_2026})
+% NeurIPS 2025 style
+\usepackage[preprint]{neurips_2025}
+
 \usepackage[utf8]{inputenc}
-\usepackage{amsmath,amssymb}
-\usepackage{graphicx}
-\usepackage{booktabs}
+\usepackage[T1]{fontenc}
 \usepackage{hyperref}
-\usepackage{natbib}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{multirow}
+\usepackage{amssymb}
+\usepackage{pifont}
+\usepackage{amsmath}
+\usepackage{xspace}
+\usepackage{cleveref}
 
-\title{A Temporal Multimodal Benchmark for Continual Learning \\
-on Biomedical Knowledge Graphs}
+% Custom commands
+\newcommand{\cmark}{\ding{51}}%
+\newcommand{\xmark}{\ding{55}}%
+\newcommand{\ours}{PrimeKG-CL\xspace}
+\newcommand{\primekg}{PrimeKG\xspace}
 
-\author{
-  Author Names \\
-  KAUST \\
-  \texttt{email@kaust.edu.sa}
+\title{\ours: A Continual Graph Learning Benchmark\\on Evolving Biomedical Knowledge Graphs}
+
+\author{%
+  Yousef A.~Radwan \\
+  King Abdullah University of Science and Technology (KAUST)\\
+  Thuwal, Saudi Arabia \\
+  \texttt{yousef.radwan@kaust.edu.sa}
 }
 
 \begin{document}
 
 \maketitle
 
-\begin{abstract}
-% TODO: Write abstract after experiments are complete
-Abstract placeholder. This paper presents the first continual learning benchmark
-built on a real biomedical knowledge graph (PrimeKG) with genuine temporal
-evolution. The benchmark features multimodal node features (text, molecular,
-structural), enabling study of modality-specific forgetting patterns.
-\end{abstract}
+\input{sec/0_abstract}
+\input{sec/1_intro}
+\input{sec/2_related}
+\input{sec/3_benchmark}
+\input{sec/4_experiments}
+\input{sec/5_conclusion}
 
-% Section 1: Introduction (1 page)
-\section{Introduction}
-\label{sec:intro}
-% Motivation for continual learning on biomedical KGs
-% Gap in existing benchmarks (synthetic splits vs. real temporal evolution)
-
-% Section 2: Related Work (1 page)
-\section{Related Work}
-\label{sec:related}
-% CGL benchmarks (PS-CKGE, LKGE datasets)
-% Biomedical KGs (PrimeKG, TarKG)
-% Temporal KGs
-
-% Section 3: Benchmark Construction (2 pages)
-\section{Benchmark Construction}
-\label{sec:benchmark}
-% PrimeKG temporal snapshots (t0, t1, t2)
-% Temporal diffs and task design
-% Multimodal features
-% Train/val/test splits
-
-% Section 4: Evaluation Protocol (1 page)
-\section{Evaluation Protocol}
-\label{sec:evaluation}
-% Metrics: AP, AF, BWT, FWT, MRR, Hits@K
-% Experimental setup
-% Statistical rigor (5 seeds)
-
-% Section 5: Baseline Experiments (2 pages)
-\section{Baseline Experiments}
-\label{sec:experiments}
-% Results table for all 6 baselines
-% Analysis of forgetting patterns
-% Per-task and per-relation breakdowns
-
-% Section 6: Analysis (1 page)
-\section{Analysis}
-\label{sec:analysis}
-% How multimodal features affect forgetting
-% Domain-specific forgetting patterns
-
-% Section 7: Conclusion (0.5 page)
-\section{Conclusion}
-\label{sec:conclusion}
-% Summary, limitations, future work
-
-\bibliographystyle{plainnat}
-\bibliography{references}
+{
+\small
+\bibliographystyle{unsrt}
+\bibliography{refs}
+}
 
 \end{document}

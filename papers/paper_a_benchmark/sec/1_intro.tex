@@ -1,0 +1,34 @@
+\section{Introduction}
+\label{sec:intro}
+
+Biomedical knowledge graphs (KGs) have become indispensable resources for drug discovery, disease understanding, and clinical decision support~\citep{Chandak2023, Huang2024}.
+These graphs integrate diverse biomedical entities---genes, proteins, drugs, diseases, and biological processes---into rich relational structures that power downstream applications such as drug repurposing~\citep{Huang2024} and target identification.
+However, biomedical knowledge is not static: new drug-disease associations, protein interactions, and gene-phenotype links are discovered continuously as databases like DisGeNET, the Human Phenotype Ontology (HPO), and Gene Ontology (GO) are updated.
+A model trained on a KG snapshot from 2021 will encounter substantial new knowledge by 2023, raising the fundamental question: \emph{how can graph-based models continually learn from evolving biomedical KGs without catastrophically forgetting previously acquired knowledge?}
+
+Continual graph learning (CGL) has emerged as an active research area addressing this challenge~\citep{Daruna2021}.
+Methods such as Elastic Weight Consolidation (EWC)~\citep{Kirkpatrick2017}, experience replay~\citep{Rolnick2019}, and specialized frameworks like LKGE~\citep{Cui2023} have been proposed to mitigate catastrophic forgetting in knowledge graph embeddings.
+However, existing CGL benchmarks suffer from a critical limitation: they construct temporal tasks through \emph{synthetic} partitioning of static, generic KGs.
+For example, LKGE~\citep{Cui2023} partitions FB15k-237 and WN18RR into artificial time steps by randomly shuffling and splitting triples, while PS-CKGE~\citep{Wu2024} creates pseudo-temporal sequences from ICEWS~\citep{GarciaDuran2018} event data.
+These approaches fail to capture the real dynamics of knowledge evolution---the addition of genuinely new entities and relations, the removal of deprecated knowledge, and the domain-specific patterns of change that characterize biomedical KGs.
+
+In this paper, we introduce \ours (\textbf{Prime}KG for \textbf{C}ontinual \textbf{L}earning), the first CGL benchmark built on a real biomedical knowledge graph with genuine temporal evolution.
+\ours is constructed from PrimeKG~\citep{Chandak2023}, a precision medicine KG integrating 20+ biomedical databases.
+We reconstruct two temporal snapshots by querying the same upstream databases at different time points: $t_0$ (June 2021, the original PrimeKG release) and $t_1$ (July 2023, rebuilt from nine freely accessible databases).
+The temporal difference between snapshots reveals substantial real-world evolution: 5.7M edges added, 889K edges removed, and 7.2M edges persisting---reflecting genuine changes in biomedical understanding rather than artificial partitioning.
+
+Our benchmark evaluation of seven continual learning methods reveals several important findings.
+First, our proposed Cross-Modal Knowledge Learner (CMKL), which leverages multimodal node features through cross-attention fusion and modality-aware EWC, achieves the highest average link prediction performance (AP\,=\,0.063), outperforming Joint Training by 3.5$\times$.
+Second, EWC provides meaningful forgetting reduction (AF\,=\,0.017) compared to naive sequential training (AF\,=\,0.021), validating its utility in the biomedical domain.
+Third, domain-specific challenges emerge: the gene/protein entity type dominates the graph (73\% of triples), creating a type imbalance that affects all methods, and the DistMult decoder~\citep{Yang2015} substantially outperforms TransE~\citep{Bordes2013} on this heterogeneous biomedical graph.
+
+\vspace{0.3em}
+\noindent Our contributions are as follows:
+\begin{enumerate}
+    \item \textbf{Benchmark.} We introduce \ours, the first CGL benchmark on a real biomedical KG with genuine temporal evolution from nine authoritative databases, comprising 129K+ nodes, 8.1M+ edges, 10 node types, 30 relation types, and 10 continual learning tasks.
+    \item \textbf{Multimodal features.} We provide multimodal node representations---textual (BiomedBERT), molecular (Morgan fingerprints), and structural (R-GCN)---enabling the study of modality-specific forgetting patterns.
+    \item \textbf{Comprehensive evaluation.} We benchmark seven continual learning methods across three evaluation tracks (link prediction, KGQA, node classification) with five random seeds and report six CL metrics (AP, AF, BWT, FWT, REM, MRR).
+    \item \textbf{Open release.} We release the benchmark data, construction pipeline, all baseline implementations, and trained models to facilitate reproducible research.
+\end{enumerate}
+
+\input{tables/comparison}

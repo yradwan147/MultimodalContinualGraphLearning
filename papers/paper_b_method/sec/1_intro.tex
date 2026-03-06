@@ -1,0 +1,33 @@
+\section{Introduction}
+\label{sec:intro}
+
+Drug repurposing---identifying new therapeutic uses for existing drugs---offers a cost-effective path toward addressing unmet medical needs, with computational approaches increasingly relying on biomedical knowledge graphs (KGs) to model the complex web of drug-disease-gene interactions~\citep{chandak2023building, huang2024zero}.
+These KGs are inherently dynamic: databases such as DrugBank, DisGeNET, and the Gene Ontology are updated on monthly or quarterly cycles, introducing new entities, relations, and revised annotations.
+Retraining KG embedding models from scratch after each update is computationally prohibitive and discards previously learned representations.
+Continual learning offers a principled alternative, enabling models to incrementally assimilate new knowledge while preserving past competencies.
+However, naive sequential fine-tuning on new graph snapshots leads to \emph{catastrophic forgetting}~\citep{kirkpatrick2017overcoming}, where performance on previously learned facts degrades substantially.
+
+Existing continual knowledge graph embedding (CKGE) methods---including EWC-based regularization~\citep{kirkpatrick2017overcoming}, experience replay~\citep{rolnick2019experience}, and the LKGE framework~\citep{cui2023lifelong}---address forgetting exclusively through the lens of graph structure.
+They treat KG entities as featureless identifiers and apply uniform regularization across all model parameters, implicitly assuming that all components forget at the same rate.
+This assumption is fundamentally flawed in modern biomedical KGs where entities carry rich multimodal attributes: textual descriptions from medical ontologies, molecular fingerprints from chemical databases, and functional annotations from gene ontologies.
+These modalities provide complementary signals---a drug's molecular structure constrains its binding targets, while its textual description captures clinical context---yet no existing CKGE method leverages or protects them.
+
+We propose \fullname (\ours), the first continual learning framework that is both natively multimodal and modality-aware.
+\ours introduces three key innovations:
+\textbf{(1) Modality-Aware Elastic Weight Consolidation (MA-EWC)}, which maintains separate Fisher information matrices for structural, textual, and molecular encoder parameters and applies independently tuned regularization strengths, reflecting the empirical observation that structural parameters are more forgetting-prone than molecular ones;
+\textbf{(2) Multimodal Memory Replay}, which selects diverse exemplars via K-means clustering on structural embeddings to populate a fixed-size replay buffer, ensuring that replayed triples cover topologically distinct regions of the graph; and
+\textbf{(3) Cross-Modal Attention Fusion}, which uses bidirectional cross-attention with four heads to enable each modality to attend to complementary information from the others before producing a unified entity representation.
+
+On the PrimeKG-CL benchmark---a continual learning testbed with 129K+ entities, 8.1M+ edges, and 10 temporal link prediction tasks derived from real-world database updates---\ours achieves an average performance (AP) of $0.063$, outperforming the strongest continual baseline LKGE ($0.039$) by $1.6\times$ and Joint Training ($0.018$) by $3.5\times$.
+On continual node classification, \ours attains AP\,=\,$0.431$, exceeding Joint Training by $16\%$.
+These gains confirm that multimodal representations provide substantial advantages for KG reasoning, particularly when combined with modality-aware continual learning mechanisms.
+
+\input{tables/comparison}
+
+Our contributions are as follows:
+\begin{enumerate}
+    \item We identify and characterize the phenomenon of \emph{modality-specific forgetting} in continual biomedical KG learning, showing that structural, textual, and molecular encoders exhibit distinct forgetting dynamics.
+    \item We propose \ours, the first continual KG learning method that jointly encodes structural, textual, and molecular modalities and protects them with modality-aware regularization and diverse replay.
+    \item We introduce modality-aware EWC with per-modality Fisher matrices and independently tuned regularization strengths, enabling fine-grained forgetting control.
+    \item We demonstrate state-of-the-art continual link prediction and node classification performance on PrimeKG-CL, with thorough analysis of the interplay between multimodal representations and continual learning.
+\end{enumerate}

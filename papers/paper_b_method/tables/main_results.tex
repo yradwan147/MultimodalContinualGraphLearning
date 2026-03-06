@@ -1,0 +1,19 @@
+\begin{table}[t]
+\caption{Continual link prediction results on PrimeKG-CL (10 tasks, 5 seeds). AP: Average Performance (MRR, higher is better), AF: Average Forgetting (lower is better), BWT: Backward Transfer (higher is better), REM: Remembering (higher is better). Best AP in \textbf{bold}.}
+\label{tab:main_results}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{AP} $\uparrow$ & \textbf{AF} $\downarrow$ & \textbf{BWT} $\uparrow$ & \textbf{REM} $\uparrow$ \\
+\midrule
+\ours (DistMult) & $\mathbf{0.063 \pm 0.003}$ & $0.040 \pm 0.003$ & $-0.040 \pm 0.003$ & $0.960 \pm 0.003$ \\
+LKGE (TransE) & $0.039 \pm 0.001$ & $0.012 \pm 0.002$ & $-0.010 \pm 0.003$ & $0.990 \pm 0.003$ \\
+Joint Training & $0.018 \pm 0.000$ & $0.000$ & $0.000$ & $1.000$ \\
+Naive Sequential & $0.004 \pm 0.000$ & $0.021 \pm 0.000$ & $-0.021 \pm 0.000$ & $0.980 \pm 0.000$ \\
+EWC & $0.004 \pm 0.000$ & $0.017 \pm 0.001$ & $-0.017 \pm 0.001$ & $0.984 \pm 0.001$ \\
+Experience Replay & $0.004 \pm 0.000$ & $0.021 \pm 0.000$ & $-0.021 \pm 0.000$ & $0.980 \pm 0.000$ \\
+RAG (Qwen2.5-7B) & $0.002 \pm 0.001$ & $0.001 \pm 0.001$ & $-0.001 \pm 0.001$ & $0.999 \pm 0.001$ \\
+\bottomrule
+\end{tabular}
+\end{table}

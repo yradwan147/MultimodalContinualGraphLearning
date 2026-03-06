@@ -1298,3 +1298,159 @@ Total: 20 jobs. CMKL/LKGE/RAG/NC unaffected (different eval paths).
 4. Multi-hop evaluation as standalone post-hoc (Run 4)
 5. Ablation studies
 6. Future: rebuild t1 with DrugBank + UMLS
+
+## 2026-03-06 Session - Run 3 Log Analysis
+
+### Run 3 Results: ALL 20/20 JOBS SUCCEEDED
+- Job IDs: 45842266-45842287 (submitted ~06:56 Mar 6, 2026)
+- All ran on Tesla V100-SXM2-32GB
+- Config: TransE, dim=256, epochs=100, lr=0.001, 10 tasks
+- Only warnings: benign test set sampling (50K from 1.6M triples)
+- No errors, OOM, segfaults, or time limit issues
+
+#### Results Summary Table (Run 3)
+
+| Method | Seed | JobID | Time | AP | AF | BWT | FWT | REM |
+|--------|------|-------|------|------|------|-------|------|------|
+| Naive Seq | 42 | 45842266 | 4.2h | 0.0043 | 0.0205 | -0.0205 | 0.0000 | 0.9795 |
+| Naive Seq | 123 | 45842270 | 4.3h | 0.0044 | 0.0207 | -0.0206 | 0.0000 | 0.9794 |
+| Naive Seq | 456 | 45842275 | 4.3h | 0.0044 | 0.0207 | -0.0205 | 0.0000 | 0.9795 |
+| Naive Seq | 789 | 45842279 | 4.4h | 0.0044 | 0.0210 | -0.0208 | 0.0000 | 0.9792 |
+| Naive Seq | 1024 | 45842284 | 4.2h | 0.0042 | 0.0203 | -0.0201 | 0.0000 | 0.9799 |
+| EWC | 42 | 45842267 | 5.0h | 0.0039 | 0.0169 | -0.0168 | 0.0000 | 0.9832 |
+| EWC | 123 | 45842271 | 4.9h | 0.0044 | 0.0169 | -0.0162 | 0.0000 | 0.9838 |
+| EWC | 456 | 45842276 | 5.0h | 0.0043 | 0.0174 | -0.0174 | 0.0000 | 0.9826 |
+| EWC | 789 | 45842280 | 4.9h | 0.0044 | 0.0174 | -0.0164 | 0.0000 | 0.9836 |
+| EWC | 1024 | 45842285 | 4.9h | 0.0037 | 0.0163 | -0.0159 | 0.0000 | 0.9841 |
+| Exp Replay | 42 | 45842268 | 4.1h | 0.0037 | 0.0210 | -0.0210 | 0.0000 | 0.9790 |
+| Exp Replay | 123 | 45842272 | 4.2h | 0.0040 | 0.0206 | -0.0205 | 0.0000 | 0.9795 |
+| Exp Replay | 456 | 45842277 | 4.2h | 0.0040 | 0.0205 | -0.0202 | 0.0000 | 0.9798 |
+| Exp Replay | 789 | 45842281 | 4.2h | 0.0040 | 0.0206 | -0.0204 | 0.0000 | 0.9796 |
+| Exp Replay | 1024 | 45842286 | 4.2h | 0.0038 | 0.0205 | -0.0203 | 0.0000 | 0.9797 |
+| Joint Train | 42 | 45842269 | 3.7h | 0.0179 | 0.0000 | 0.0000 | 0.0175 | 1.0000 |
+| Joint Train | 123 | 45842274 | 3.7h | 0.0174 | 0.0000 | 0.0000 | 0.0170 | 1.0000 |
+| Joint Train | 456 | 45842278 | 3.8h | 0.0174 | 0.0000 | 0.0000 | 0.0169 | 1.0000 |
+| Joint Train | 789 | 45842282 | 3.7h | 0.0174 | 0.0000 | 0.0000 | 0.0170 | 1.0000 |
+| Joint Train | 1024 | 45842287 | 3.7h | 0.0173 | 0.0000 | 0.0000 | 0.0169 | 1.0000 |
+
+#### Cross-Seed Averages (mean +/- std)
+- **Joint Training**: AP=0.0175+/-0.0002, AF=0.0000, BWT=0.0000, FWT=0.0171+/-0.0003, REM=1.0000
+- **EWC**: AP=0.0041+/-0.0003, AF=0.0170+/-0.0005, BWT=-0.0165+/-0.0006, FWT=0.0000, REM=0.9835+/-0.0006
+- **Naive Seq**: AP=0.0043+/-0.0001, AF=0.0206+/-0.0003, BWT=-0.0205+/-0.0002, FWT=0.0000, REM=0.9795+/-0.0002
+- **Exp Replay**: AP=0.0039+/-0.0001, AF=0.0206+/-0.0002, BWT=-0.0205+/-0.0003, FWT=0.0000, REM=0.9795+/-0.0003
+
+#### Observations
+- EWC shows clearly less forgetting (AF=0.017) vs Naive Seq (AF=0.021) and Replay (AF=0.021)
+- Joint Training is the upper bound as expected (AP=0.0175, no forgetting)
+- Replay does NOT reduce forgetting vs Naive -- nearly identical AF/BWT
+- All AP values very low (0.004-0.018 range) -- MRR-based, large entity space (129K+)
+- All runs consistent across seeds (low std), confirming reproducibility
+
+### Next Steps
+1. Merge Run 3 results JSON files, generate paper tables
+2. Multi-hop evaluation (Run 4)
+3. Ablation studies
+4. Future: rebuild t1 with DrugBank + UMLS
+
+---
+
+## 2026-03-06 Session — Final Docs Update + Paper Writing Prep (Phase 6 & 7)
+
+### Context
+All experiments complete (Runs 1-3, 82+ result files). Run 3: 20/20 KGE baseline LP jobs succeeded with custom PyKEEN eval fix. This session updates all documentation with final combined results and writes both NeurIPS papers.
+
+### Documentation Updates
+
+#### `docs/experiment-results.md` — Full rewrite with final combined results
+- Renamed from "Run 1+2" to "Final Combined Results (Runs 1+2+3)"
+- Added Run 3 KGE baseline numbers (naive seq, joint, EWC, replay — all 5/5 seeds)
+- Added Run 3 per-seed details for all 4 KGE baselines
+- Added eval methodology column to LP table
+- Updated Key Findings with Run 3 insights (EWC reduces AF, Replay does NOT)
+- Updated Run History table with Run 3 (20 jobs, 20 completed, 0 failed)
+- Total: 82 result files across 3 runs
+
+#### `docs/run3_report.md` — NEW
+- Full report covering Run 3 (20 jobs, all succeeded, custom eval fix)
+- Describes the PyKEEN segfault problem and the custom evaluation solution
+- Per-seed and cross-seed results tables
+- Consistency note: Run 3 numbers supersede prior KGE baseline LP results
+
+#### `.claude-plans/phase6-paper-a-benchmark.md` — Updated
+- Added final LP and NC results tables with actual numbers
+- Added eval methodology notes (custom eval, CMKL eval, LKGE eval)
+- Added Data & Evaluation Notes section (DrugBank/UMLS, ablations, multi-hop)
+
+#### `.claude-plans/phase7-paper-b-method.md` — Updated
+- Added final CMKL vs all baselines comparison with actual numbers
+- Added notes about ablation status (smoke test only)
+- Added Data & Evaluation Notes section
+- Updated completion criteria
+
+#### `README.md` — Updated
+- Added project status table (all phases through Phase 5 DONE, 6-7 IN PROGRESS)
+- Added LP and NC results summary tables
+- Added link to docs/experiment-results.md
+- Updated project structure description
+
+---
+
+## 2026-03-06 Session - Write Paper B (CMKL Method) LaTeX
+
+### Changes Made
+- `papers/paper_b_method/main.tex`: Complete rewrite from placeholder to full NeurIPS-format paper with `neurips_2025` style, all standard packages, `\ours` and `\fullname` macros, `\input{}` for all sections
+- `papers/paper_b_method/neurips_2025.sty`: Copied NeurIPS 2025 style file from reference
+- `papers/paper_b_method/sec/0_abstract.tex`: ~200 word abstract covering modality-specific forgetting problem, CMKL contributions (MA-EWC, multimodal replay, cross-modal attention), architecture, and key results (AP=0.063 LP, AP=0.431 NC)
+- `papers/paper_b_method/sec/1_intro.tex`: 5-paragraph intro covering drug repurposing motivation, gap in CKGE methods (structure-only, uniform regularization), 3 CMKL innovations, key findings, 4 numbered contributions. Includes Table 1 comparison.
+- `papers/paper_b_method/sec/2_related.tex`: 6 paragraph-topics: Continual KGE, Multimodal Graph Learning, Biomedical KG Reasoning, EWC, Experience Replay, LLMs for KGs. 23 citations.
+- `papers/paper_b_method/sec/3_method.tex`: Full method with formal problem definition, 6 subsections (overview, encoders with R-GCN/BiomedBERT/Morgan FP equations, cross-modal attention fusion, MA-EWC with per-modality Fisher, multimodal memory replay with K-means, training procedure with Algorithm 1 pseudocode)
+- `papers/paper_b_method/sec/4_experiments.tex`: Setup (PrimeKG-CL, baselines, metrics, implementation details), main LP results (Table 2), NC results (Table 3), analysis (forgetting trade-off, decoder confound, gene-protein anomaly, replay at scale)
+- `papers/paper_b_method/sec/5_conclusion.tex`: Summary, limitations (smoke-test ablations, decoder confound, 2 snapshots), future work (full ablations, multi-hop, DrugBank/UMLS)
+- `papers/paper_b_method/tables/comparison.tex`: Table 1 - CMKL vs LKGE/EWC/BER/MSCGL with cmark/xmark
+- `papers/paper_b_method/tables/main_results.tex`: Table 2 - 7 methods x 4 CL metrics for LP (exact numbers as specified)
+- `papers/paper_b_method/tables/nc_results.tex`: Table 3 - 5 methods x 3 CL metrics for NC (exact numbers as specified)
+- `papers/paper_b_method/refs.bib`: 23 BibTeX entries with real papers, authors, venues, years
+
+### Compilation
+- Paper compiles cleanly with pdflatex + bibtex (no errors, no warnings)
+- Output: 10 pages, NeurIPS format
+- All cross-references resolve, all citations link to refs.bib entries
+
+### Next Steps
+1. Add architecture overview figure (fig:overview) when diagram is ready
+2. Full-scale ablation experiments on IBEX
+3. Decoder-controlled ablation to disentangle DistMult vs TransE confound
+
+---
+
+## 2026-03-06 Session - Write Paper A (Benchmark) Full NeurIPS LaTeX
+
+### Changes Made
+- `papers/paper_a_benchmark/main.tex`: Complete rewrite - NeurIPS 2025 preprint format with all packages (booktabs, amsfonts, microtype, xcolor, graphicx, cleveref, etc.), custom commands (\ours, \primekg, \cmark, \xmark), inputs for all 6 section files and refs.bib
+- `papers/paper_a_benchmark/neurips_2025.sty`: Copied from ReefNet reference paper
+- `papers/paper_a_benchmark/sec/0_abstract.tex`: ~200 word abstract - PrimeKG-CL benchmark, 129K nodes, 8.1M edges, 10 tasks, 7 methods, CMKL AP=0.063
+- `papers/paper_a_benchmark/sec/1_intro.tex`: ~1.5 pages - motivation (evolving biomedical KGs), gap (synthetic CGL benchmarks), contribution (PrimeKG-CL), key findings, 4 numbered contributions, includes Table 1 comparison
+- `papers/paper_a_benchmark/sec/2_related.tex`: ~1 page - 5 paragraph topics: CGL, Biomedical KGs, Temporal KGs, CGL Benchmarks, KGs and LLMs
+- `papers/paper_a_benchmark/sec/3_benchmark.tex`: ~2.5 pages - temporal snapshots (t0/t1), temporal diff (+5.7M/-889K/7.2M), 10 entity-type tasks, evaluation tasks (LP/KGQA/NC) with CL metric equations, multimodal features (BiomedBERT/Morgan/R-GCN)
+- `papers/paper_a_benchmark/sec/4_experiments.tex`: ~2.5 pages - setup (7 baselines, 5 seeds, V100), LP results table + analysis, NC results table, KGQA results, analysis (EWC vs Replay, gene/protein dominance, domain insights)
+- `papers/paper_a_benchmark/sec/5_conclusion.tex`: ~0.5 page - summary, limitations (2 snapshots, licensing, eval methodology), future work
+- `papers/paper_a_benchmark/tables/comparison.tex`: Table 1 - PrimeKG-CL vs LKGE vs PS-CKGE vs ICEWS with checkmarks
+- `papers/paper_a_benchmark/tables/dataset_stats.tex`: Table 2 - t0/t1 statistics (nodes, edges, types, diff)
+- `papers/paper_a_benchmark/tables/main_results.tex`: Table 3 - 7 methods x 4 LP metrics (AP/AF/BWT/REM) with exact numbers
+- `papers/paper_a_benchmark/tables/nc_results.tex`: Table 4 - 5 methods x 3 NC metrics (AP/AF/BWT) with exact numbers
+- `papers/paper_a_benchmark/refs.bib`: 22 BibTeX entries - all real papers with correct authors, titles, venues, years
+
+### Compilation
+- Paper compiles cleanly with pdflatex + bibtex (zero errors, zero warnings)
+- Output: 10 pages (including references), NeurIPS format
+- All 22 citations resolve, all cross-references (tables, sections, equations) link correctly
+
+### Issue: \makecell undefined
+- **Error:** `Undefined control sequence \makecell` in tables/comparison.tex
+- **Root cause:** Used \makecell{Real\\Temporal} without loading makecell package
+- **Fix:** Replaced with plain text "Real Temp." to avoid needing extra package
+
+### Next Steps
+1. Add benchmark overview figure when diagram is ready
+2. Proofread and polish language
+3. Add supplementary material section if needed for venue submission

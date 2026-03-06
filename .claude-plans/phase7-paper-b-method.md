@@ -76,12 +76,25 @@ Different modalities (structure, text, molecular) experience different distribut
 - BER/Replay: random selection, no diversity
 - MSCGL: multimodal but not continual
 
-### Key findings
-- CMKL achieves highest AP with lowest AF across all baselines
-- Modality-aware EWC > global EWC (ablation proves per-modality lambdas help)
-- Cross-attention fusion > concatenation
-- K-means diverse replay > random replay
-- Distillation provides additional forgetting reduction
+### Key findings (from IBEX experiments — Runs 1-3)
+
+**CMKL vs all baselines on LP (10 tasks, 5 seeds):**
+| Method | AP | AF | REM |
+|--------|-----|-----|------|
+| **CMKL (DistMult)** | **0.063 ± 0.003** | **0.040 ± 0.003** | **0.960 ± 0.003** |
+| LKGE (TransE) | 0.039 ± 0.001 | 0.012 ± 0.002 | 0.990 ± 0.003 |
+| Joint Training | 0.018 ± 0.000 | 0.000 | 1.000 |
+| EWC | 0.004 ± 0.000 | 0.017 ± 0.001 | 0.984 ± 0.001 |
+| Naive Sequential | 0.004 ± 0.000 | 0.021 ± 0.000 | 0.980 ± 0.000 |
+| Experience Replay | 0.004 ± 0.000 | 0.021 ± 0.000 | 0.980 ± 0.000 |
+| RAG (Qwen2.5-7B) | 0.002 ± 0.001 | 0.001 ± 0.001 | 0.999 ± 0.001 |
+
+**CMKL NC:** AP=0.431 ± 0.005 (1.16× Joint Training)
+
+- CMKL achieves highest AP (3.5× Joint, 1.6× LKGE) due to multimodal features + DistMult decoder
+- CMKL has higher AF than LKGE/EWC — expected trade-off: richer representations forget more
+- Ablation studies: local smoke tests only (not yet run on IBEX at scale)
+- Note: CMKL uses DistMult (bilinear) while KGE baselines use TransE (translational) — different decoder architectures contribute to AP gap
 
 ### Section mapping
 | Section | Source files |
@@ -318,14 +331,20 @@ Generate all 15 questions with `\answerYes{}`/`\answerNo{}`/`\answerNA{}` and ju
 
 ---
 
+## Data & Evaluation Notes for Paper
+
+- **Ablation studies:** Only local smoke tests available. Present smoke-test trends but note full IBEX runs are pending. Tables can show direction of effect without claiming significance.
+- **Run 3 custom eval consistency:** KGE baselines all use the same custom pessimistic eval. CMKL uses its own custom eval. Both bypass PyKEEN. Discuss in experimental setup.
+- **Decoder difference:** CMKL uses DistMult while baselines use TransE. The AP gap is partly from multimodal features AND partly from decoder architecture. Ablation "struct_only" with same decoder would isolate the multimodal contribution — available from smoke test only.
+- **Multi-hop evaluation:** Code implemented (`src/evaluation/multihop.py`) but not run at scale. Mention as future work.
+
 ## Completion Criteria
 - [ ] Complete LaTeX draft following SKILL.md spec
 - [ ] Architecture diagram (CMKL framework)
 - [ ] Algorithm pseudocode box
 - [ ] Comparison Table 1 with \cmark/\xmark
 - [ ] Main results table with bold best
-- [ ] Ablation table
-- [ ] Sensitivity analysis figures
+- [ ] Ablation table (with smoke-test data where available)
 - [ ] 20+ verified BibTeX entries
 - [ ] NeurIPS checklist completed
 - [ ] Paper compiles to clean PDF

@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{Node classification results (disease categorization) on \ours (mean $\pm$ std over 5 seeds). AP: Average Performance, AF: Average Forgetting, BWT: Backward Transfer. Best AP is \textbf{bolded}.}
+\label{tab:nc_results}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{AP} $\uparrow$ & \textbf{AF} $\downarrow$ & \textbf{BWT} $\uparrow$ \\
+\midrule
+Naive Sequential & $0.344 \pm 0.004$ & $0.011 \pm 0.002$ & $0.003 \pm 0.005$ \\
+Joint Training & $0.370 \pm 0.002$ & $0.003 \pm 0.001$ & $0.022 \pm 0.003$ \\
+EWC~\citep{Kirkpatrick2017} & $0.345 \pm 0.004$ & $0.008 \pm 0.003$ & $0.007 \pm 0.004$ \\
+Experience Replay~\citep{Rolnick2019} & $0.344 \pm 0.006$ & $0.010 \pm 0.003$ & $0.006 \pm 0.005$ \\
+\midrule
+\textbf{CMKL (ours)} & $\textbf{0.431} \pm 0.005$ & $0.004 \pm 0.002$ & $-0.000 \pm 0.002$ \\
+\bottomrule
+\end{tabular}
+\end{table}

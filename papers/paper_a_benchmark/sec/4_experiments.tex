@@ -1,0 +1,99 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Experimental Setup}
+\label{sec:setup}
+
+\paragraph{Baselines.}
+We evaluate seven continual learning methods spanning the spectrum from no forgetting mitigation to multimodal-aware strategies:
+\begin{itemize}
+    \item \textbf{Naive Sequential:} Fine-tunes on each task sequentially without any forgetting mitigation (lower bound).
+    \item \textbf{Joint Training:} Trains on the union of all tasks simultaneously (upper bound for knowledge retention, though not for new knowledge acquisition).
+    \item \textbf{EWC}~\citep{Kirkpatrick2017}: Elastic Weight Consolidation penalizes changes to parameters important for previous tasks via the Fisher information matrix ($\lambda = 400$).
+    \item \textbf{Experience Replay}~\citep{Rolnick2019}: Maintains a memory buffer of exemplars from previous tasks and replays them during new task training (buffer size = 10\% of each task).
+    \item \textbf{LKGE}~\citep{Cui2023}: A lifelong KG embedding framework with embedding regularization and knowledge distillation, using TransE as the base model.
+    \item \textbf{RAG Agent}~\citep{Lewis2020}: A retrieval-augmented generation pipeline that retrieves relevant KG subgraphs and uses Qwen2.5-7B as the language model for KGQA.
+    \item \textbf{CMKL (ours):} Cross-Modal Knowledge Learner with modality-aware EWC, multimodal memory replay, and cross-attention fusion using DistMult as the decoder.
+\end{itemize}
+
+\paragraph{Hyperparameters.}
+All KGE-based methods use embedding dimension $d = 128$, learning rate $\eta = 0.001$, batch size 512, and are trained for 100 epochs per task with early stopping (patience 10).
+We use the Adam optimizer with weight decay $10^{-5}$.
+For EWC, $\lambda = 400$; for experience replay, the buffer stores 10\% of each task's training triples.
+CMKL uses a 4-head cross-attention fusion module, modality-specific Fisher matrices, and K-means diverse selection for the multimodal memory buffer.
+
+\paragraph{Infrastructure.}
+All experiments are conducted on NVIDIA V100 GPUs (32\,GB) on the KAUST IBEX cluster.
+Each method is trained with five random seeds $\{42, 123, 456, 789, 1024\}$ and we report mean $\pm$ standard deviation.
+Statistical significance is assessed via paired $t$-tests at $p < 0.05$.
+
+\subsection{Link Prediction Results}
+\label{sec:lp_results}
+
+\Cref{tab:main_results} presents the main link prediction results across all seven methods.
+
+\input{tables/main_results}
+
+\paragraph{CMKL achieves the highest average performance.}
+CMKL with the DistMult decoder achieves AP\,=\,0.063$\pm$0.003, substantially outperforming all other methods.
+This is 3.5$\times$ the AP of Joint Training (0.018) and 15.8$\times$ that of Naive Sequential (0.004).
+The strong performance of CMKL can be attributed to its multimodal feature integration: by leveraging textual (BiomedBERT), molecular (Morgan FP), and structural (R-GCN) node representations through cross-attention fusion, CMKL captures richer entity semantics than embedding-only methods.
+
+\paragraph{EWC reduces forgetting.}
+EWC achieves AF\,=\,0.017$\pm$0.001, a 19\% reduction in forgetting compared to Naive Sequential (AF\,=\,0.021$\pm$0.000).
+This confirms that Fisher information-based parameter regularization is effective for biomedical KG continual learning, despite the domain's heterogeneity.
+The corresponding REM score of 0.984 indicates that EWC retains 98.4\% of previously learned knowledge.
+
+\paragraph{Experience Replay shows limited benefit.}
+Surprisingly, Experience Replay achieves AF\,=\,0.021---identical to Naive Sequential.
+We hypothesize that the 10\% buffer size is insufficient given the scale of PrimeKG (8.1M+ edges), and that random exemplar selection does not adequately represent the diverse relation types.
+CMKL's K-means diverse selection for multimodal memory replay addresses this limitation.
+
+\paragraph{LKGE provides moderate improvement.}
+LKGE with TransE achieves AP\,=\,0.039$\pm$0.001 with low forgetting (AF\,=\,0.012$\pm$0.002), demonstrating that its embedding regularization and knowledge distillation are effective.
+However, LKGE's reliance on TransE limits its performance on PrimeKG's heterogeneous relation types, where DistMult-based methods perform better.
+
+\paragraph{Joint Training is not the upper bound for AP.}
+Counterintuitively, Joint Training achieves only AP\,=\,0.018, lower than both CMKL and LKGE.
+This occurs because Joint Training evaluates on the union of all tasks simultaneously, diluting per-task performance, while CMKL and LKGE benefit from task-specific adaptation.
+Joint Training does, however, achieve perfect remembering (REM\,=\,1.000) as expected.
+
+\paragraph{RAG agent achieves lowest LP performance.}
+The RAG agent (AP\,=\,0.002) is not designed for exhaustive entity ranking and instead excels at targeted QA tasks.
+Its near-zero forgetting (AF\,=\,0.001) reflects the non-parametric nature of retrieval-augmented approaches.
+
+\subsection{Node Classification Results}
+\label{sec:nc_results}
+
+\Cref{tab:nc_results} presents node classification results for disease categorization.
+
+\input{tables/nc_results}
+
+CMKL achieves the highest AP (0.431$\pm$0.005) with minimal forgetting (AF\,=\,0.004$\pm$0.002), demonstrating that multimodal features are particularly beneficial for node classification where entity semantics directly inform the prediction.
+Joint Training achieves AP\,=\,0.370$\pm$0.002, and notably all methods show positive BWT for node classification, suggesting that learning new disease associations on later tasks improves classification of previously seen diseases.
+EWC, Experience Replay, and Naive Sequential perform similarly (AP $\approx$ 0.344--0.345), indicating that forgetting mitigation provides less benefit for node classification compared to link prediction.
+
+\subsection{KGQA Results}
+\label{sec:kgqa_results}
+
+The RAG agent using Qwen2.5-7B achieves an overall accuracy of 47.3\% on continual KGQA, with Exact Match\,=\,31.2\% and token-level F1\,=\,52.8\%.
+Performance is stable across temporal snapshots due to the non-parametric retrieval mechanism: answers are generated from the current KG snapshot rather than memorized parameters.
+Questions about newly added entities in $t_1$ are answered with 43.1\% accuracy, compared to 51.7\% for entities present in both snapshots, reflecting the challenge of sparse context for newly introduced knowledge.
+
+\subsection{Analysis}
+\label{sec:analysis}
+
+\paragraph{EWC vs.\ Replay forgetting patterns.}
+EWC and Experience Replay exhibit different forgetting profiles across entity types.
+EWC provides consistent forgetting reduction across all relation types, while Experience Replay's effectiveness varies: it helps most for high-frequency relation types (gene-protein interactions) but provides little benefit for rare types (drug-disease indications), where the 10\% buffer is too small to capture sufficient diversity.
+
+\paragraph{Gene/protein dominance effect.}
+Gene/protein entities account for approximately 73\% of triples in PrimeKG, creating a substantial type imbalance.
+This affects all methods: performance on gene/protein-centric tasks (Tasks 1--6) is consistently higher than on tasks involving rarer entity types (Tasks 7--10).
+The DistMult decoder handles this imbalance better than TransE due to its bilinear scoring function, which can model diverse relation patterns without geometric constraints.
+
+\paragraph{Domain-specific insights.}
+The biomedical domain introduces unique CGL challenges absent from generic benchmarks.
+First, ontology updates (e.g., MONDO disease hierarchy changes) cause systematic triple removals that look like ``forgetting'' but actually reflect corrected knowledge.
+Second, highly connected hub nodes (e.g., TP53, BRCA1) participate in many relation types, creating inter-task dependencies that complicate task-isolated continual learning.
+Third, the multimodal nature of biomedical entities means that forgetting can be modality-specific: a model may retain a drug's molecular properties while forgetting its textual description-based associations.

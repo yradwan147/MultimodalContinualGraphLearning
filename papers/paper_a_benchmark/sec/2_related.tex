@@ -1,0 +1,35 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Continual Graph Learning.}
+Continual learning aims to sequentially learn from a stream of tasks without catastrophically forgetting prior knowledge~\citep{Kirkpatrick2017}.
+In the knowledge graph domain, LKGE~\citep{Cui2023} introduced a lifelong KG embedding framework that applies EWC, experience replay, and knowledge distillation to TransE, DistMult, and RotatE~\citep{Bordes2013, Yang2015, Sun2019} on synthetic splits of FB15k-237 and WN18RR.
+PS-CKGE~\citep{Wu2024} proposed pseudo-siamese networks for continual KGE, while IncDE~\citep{Song2023} addressed inductive continual KGE with decoupled embeddings.
+Synaptic Intelligence~\citep{Zenke2017} offers an alternative to EWC by accumulating importance online.
+However, all existing CGL methods are evaluated on synthetically partitioned generic KGs, leaving their effectiveness on real-world biomedical KG evolution untested.
+
+\paragraph{Biomedical Knowledge Graphs.}
+PrimeKG~\citep{Chandak2023} is a precision medicine KG that integrates 20+ databases into a unified schema with 129K+ nodes across 10 biomedical entity types (genes/proteins, diseases, drugs, biological processes, molecular functions, cellular components, anatomies, pathways, phenotypes, and side effects).
+TxGNN~\citep{Huang2024} leverages PrimeKG for therapeutic use prediction via graph neural networks, demonstrating the value of rich biomedical KGs for drug repurposing.
+Hetionet~\citep{Himmelstein2017} is an earlier integrative biomedical network that inspired PrimeKG's design.
+While these resources have enabled significant advances in biomedical AI, none has been studied in a continual learning setting with real temporal evolution.
+
+\paragraph{Temporal Knowledge Graphs.}
+Temporal KGs such as ICEWS~\citep{GarciaDuran2018} and YAGO model knowledge with explicit timestamps on facts.
+These are fundamentally \emph{event-based} KGs where each triple has temporal metadata (e.g., ``Obama visited France on 2015-03-01''), and the learning task is temporal link prediction or event forecasting.
+In contrast, biomedical KGs undergo \emph{structural evolution}: entire entities and relation types are added or removed as scientific understanding advances, without explicit timestamps on individual facts.
+\ours captures this structural evolution paradigm, which is more representative of how real-world biomedical knowledge changes over time.
+
+\paragraph{CGL Benchmarks.}
+Existing CGL benchmarks are limited in several respects (\cref{tab:comparison}).
+LKGE~\citep{Cui2023} partitions FB15k-237 (a subset of Freebase) into artificial time steps by random shuffling, losing any notion of real temporal dynamics.
+ICEWS~\citep{GarciaDuran2018} provides real timestamps but covers political events rather than biomedical knowledge, and its temporal structure is event-based rather than evolutionary.
+PS-CKGE~\citep{Wu2024} similarly operates on generic KGs with synthetic splits.
+None of these benchmarks provides multimodal node features or domain-specific evaluation tasks.
+\ours addresses all of these limitations by offering real temporal evolution, multimodal features, biomedical domain specificity, and multiple evaluation tracks.
+
+\paragraph{Knowledge Graphs and Language Models.}
+Recent work has highlighted the complementary nature of knowledge graphs and large language models (LLMs)~\citep{Pan2024}.
+While LLMs encode vast implicit knowledge, they suffer from hallucinations and cannot be easily updated with new factual knowledge.
+KGs provide structured, verifiable knowledge that can ground LLM reasoning.
+Our benchmark includes a retrieval-augmented generation (RAG) baseline~\citep{Lewis2020} that combines KG retrieval with an LLM (Qwen2.5-7B) for continual KGQA, exploring this complementary relationship in the continual learning setting.

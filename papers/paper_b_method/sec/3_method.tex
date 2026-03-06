@@ -1,0 +1,150 @@
+\section{Method}
+\label{sec:method}
+
+We consider an evolving knowledge graph observed as a sequence of snapshots $\{G_1, G_2, \ldots, G_T\}$, where each snapshot $G_t = (\mathcal{V}_t, \mathcal{E}_t, \mathcal{R}_t, \mathbf{X}_t)$ consists of entities $\mathcal{V}_t$, typed edges $\mathcal{E}_t \subseteq \mathcal{V}_t \times \mathcal{R}_t \times \mathcal{V}_t$, relation types $\mathcal{R}_t$, and multimodal entity attributes $\mathbf{X}_t$.
+Each entity $v \in \mathcal{V}_t$ may carry up to three types of features: structural context from its local neighborhood, textual descriptions $x_v^{\text{text}}$ (e.g., disease definitions, gene summaries), and molecular representations $x_v^{\text{mol}}$ (e.g., SMILES strings converted to Morgan fingerprints).
+The benchmark defines a task sequence $\mathcal{T} = \{T_1, T_2, \ldots, T_K\}$ derived from the temporal graph snapshots, where each task $T_k$ provides training triples $(h, r, t) \in \mathcal{E}_k$ for a specific relation type.
+The objective is to learn entity embeddings $\mathbf{h}_v \in \mathbb{R}^D$ that perform well on link prediction across all tasks seen so far, without catastrophic forgetting of previously learned relations.
+
+\subsection{Architecture Overview}
+\label{subsec:overview}
+
+\ours consists of four stages: (i)~three modality-specific encoders that extract structural, textual, and molecular representations; (ii)~a cross-modal attention fusion module that combines these representations through bidirectional attention; (iii)~a decoder (DistMult) that scores candidate triples using the fused entity embeddings; and (iv)~continual learning mechanisms---modality-aware EWC and multimodal memory replay---that protect previously learned knowledge as the model trains on new tasks.
+
+\subsection{Modality-Specific Encoders}
+\label{subsec:encoders}
+
+\paragraph{Structural Encoder.}
+We employ a Relational Graph Convolutional Network (R-GCN)~\citep{schlichtkrull2018modeling} with basis decomposition to encode the graph structure.
+The message-passing update for entity $v$ at layer $l$ is:
+\begin{equation}
+    \mathbf{h}_v^{(l+1)} = \sigma \left( \sum_{r \in \mathcal{R}} \sum_{u \in \mathcal{N}_v^r} \frac{1}{|\mathcal{N}_v^r|} \mathbf{W}_r^{(l)} \mathbf{h}_u^{(l)} + \mathbf{W}_0^{(l)} \mathbf{h}_v^{(l)} \right),
+    \label{eq:rgcn}
+\end{equation}
+where $\mathcal{N}_v^r$ denotes the set of neighbors of $v$ under relation $r$, $\mathbf{W}_r^{(l)}$ is the relation-specific weight matrix decomposed as $\mathbf{W}_r^{(l)} = \sum_{b=1}^{B} a_{rb}^{(l)} \mathbf{V}_b^{(l)}$ with $B$ basis matrices, and $\sigma$ is ReLU activation.
+We use two R-GCN layers, yielding structural embeddings $\mathbf{h}_v^s \in \mathbb{R}^D$.
+
+\paragraph{Textual Encoder.}
+For entities with textual descriptions (disease definitions, gene summaries, biological process annotations), we use a frozen BiomedBERT~\citep{gu2021domain} to extract contextualized token representations, followed by mean pooling and a learned linear projection:
+\begin{equation}
+    \mathbf{h}_v^t = \mathbf{W}_{\text{proj}} \cdot \text{MeanPool}(\text{BiomedBERT}(x_v^{\text{text}})) + \mathbf{b}_{\text{proj}},
+    \label{eq:text}
+\end{equation}
+where $\mathbf{W}_{\text{proj}} \in \mathbb{R}^{D \times 768}$ projects from BiomedBERT's hidden dimension to the shared embedding dimension $D$.
+BiomedBERT weights are frozen to reduce computational cost and avoid catastrophic forgetting of pretrained biomedical knowledge; only the projection layer is trained.
+Entities without textual features receive a learned default embedding.
+
+\paragraph{Molecular Encoder.}
+Drug nodes carry molecular structure information encoded as Morgan fingerprints~\citep{rogers2010extended} (1024-bit, radius 2), which capture circular substructure patterns.
+We pass these through a two-layer MLP with ReLU activation and dropout:
+\begin{equation}
+    \mathbf{h}_v^m = \text{MLP}(x_v^{\text{mol}}) = \mathbf{W}_2 \cdot \text{ReLU}(\mathbf{W}_1 \cdot x_v^{\text{mol}} + \mathbf{b}_1) + \mathbf{b}_2,
+    \label{eq:mol}
+\end{equation}
+where $\mathbf{W}_1 \in \mathbb{R}^{D \times 1024}$ and $\mathbf{W}_2 \in \mathbb{R}^{D \times D}$.
+Entities without molecular features (e.g., diseases, pathways) receive a learned default embedding.
+
+\subsection{Cross-Modal Attention Fusion}
+\label{subsec:fusion}
+
+To enable information exchange across modalities, we employ bidirectional cross-modal attention.
+Given the three modality embeddings $\mathbf{h}^s, \mathbf{h}^t, \mathbf{h}^m \in \mathbb{R}^{N \times D}$ (where $N$ is the number of entities in the current batch), we compute pairwise cross-attention between all modality pairs.
+For modalities $i$ and $j$, the cross-attention output is:
+\begin{equation}
+    \text{CrossAttn}(\mathbf{h}^i, \mathbf{h}^j) = \text{softmax}\left(\frac{\mathbf{Q}_i \mathbf{K}_j^\top}{\sqrt{D/H}}\right) \mathbf{V}_j,
+    \label{eq:crossattn}
+\end{equation}
+where $\mathbf{Q}_i = \mathbf{h}^i \mathbf{W}_Q^i$, $\mathbf{K}_j = \mathbf{h}^j \mathbf{W}_K^j$, $\mathbf{V}_j = \mathbf{h}^j \mathbf{W}_V^j$ are query, key, and value projections with $H{=}4$ attention heads.
+The fused representation combines all cross-attention outputs with residual connections:
+\begin{equation}
+    \mathbf{h}_v = \text{LayerNorm}\left(\text{MLP}_{\text{fuse}}\left([\mathbf{h}_v^s; \hat{\mathbf{h}}_v^{s \leftarrow t}; \hat{\mathbf{h}}_v^{s \leftarrow m}; \hat{\mathbf{h}}_v^{t \leftarrow s}; \hat{\mathbf{h}}_v^{m \leftarrow s}]\right) + \mathbf{h}_v^s\right),
+    \label{eq:fusion}
+\end{equation}
+where $[\cdot;\cdot]$ denotes concatenation, $\hat{\mathbf{h}}_v^{i \leftarrow j}$ is the cross-attention output from modality $j$ to modality $i$, and MLP$_{\text{fuse}}$ projects the concatenated vector back to dimension $D$.
+The residual connection from $\mathbf{h}_v^s$ ensures that the structural signal---available for all entities---serves as the primary representation, with textual and molecular signals providing complementary refinement.
+
+\subsection{Modality-Aware Elastic Weight Consolidation}
+\label{subsec:maewc}
+
+Standard EWC~\citep{kirkpatrick2017overcoming} computes a single Fisher information matrix $\mathbf{F}$ over all model parameters $\theta$ and penalizes deviations from the parameters $\theta^*$ learned on the previous task:
+\begin{equation}
+    \mathcal{L}_{\text{EWC}} = \sum_i F_i (\theta_i - \theta_i^*)^2.
+    \label{eq:ewc_standard}
+\end{equation}
+This uniform treatment fails to account for the heterogeneous nature of multimodal encoders.
+We observe empirically that structural encoder parameters exhibit high Fisher values and are most susceptible to forgetting due to topological drift between graph snapshots, while molecular encoder parameters---which process stable fingerprint features---show lower Fisher values and are more robust.
+
+Modality-Aware EWC (MA-EWC) addresses this by partitioning model parameters into modality-specific groups $\theta = \{\theta_s, \theta_t, \theta_m, \theta_f\}$ (structural, textual, molecular, and fusion/decoder) and computing separate Fisher matrices for each:
+\begin{equation}
+    \mathcal{L}_{\text{MA-EWC}} = \lambda_s \sum_i F_i^s (\theta_{s,i} - \theta_{s,i}^*)^2 + \lambda_t \sum_i F_i^t (\theta_{t,i} - \theta_{t,i}^*)^2 + \lambda_m \sum_i F_i^m (\theta_{m,i} - \theta_{m,i}^*)^2 + \lambda_f \sum_i F_i^f (\theta_{f,i} - \theta_{f,i}^*)^2,
+    \label{eq:maewc}
+\end{equation}
+where $\lambda_s{=}10$, $\lambda_t{=}5$, $\lambda_m{=}1$, and $\lambda_f{=}5$ are per-modality regularization strengths reflecting each encoder's forgetting susceptibility.
+The Fisher matrices $\mathbf{F}^s, \mathbf{F}^t, \mathbf{F}^m, \mathbf{F}^f$ are computed after training on each task by accumulating squared gradients over the task's training data, following the diagonal Fisher approximation.
+
+\subsection{Multimodal Memory Replay}
+\label{subsec:replay}
+
+To complement regularization-based forgetting prevention, \ours maintains a fixed-size memory buffer $\mathcal{M}$ of representative triples from previous tasks.
+Na\"ive random selection risks overrepresenting dense graph regions while missing sparse but informative subgraphs.
+We use K-means clustering on the structural embeddings of head entities to ensure diversity:
+\begin{enumerate}
+    \item After training on task $T_k$, extract structural embeddings $\{\mathbf{h}_v^s\}$ for all head entities in $T_k$'s training triples.
+    \item Run K-means with $K = |\mathcal{M}| / k$ clusters (where $k$ is the task index) to partition the embedding space.
+    \item Select the triple whose head entity is closest to each cluster centroid.
+    \item Add selected triples to $\mathcal{M}$, evicting oldest entries if the buffer is full.
+\end{enumerate}
+During training on subsequent tasks, replay triples are sampled uniformly from $\mathcal{M}$ and mixed with the current task's training data.
+The replay loss is:
+\begin{equation}
+    \mathcal{L}_{\text{replay}} = \frac{1}{|\mathcal{B}_r|} \sum_{(h,r,t) \in \mathcal{B}_r} \ell(f_r(\mathbf{h}_h, \mathbf{h}_t), y),
+    \label{eq:replay}
+\end{equation}
+where $\mathcal{B}_r$ is a mini-batch of replayed triples and $\ell$ is the same loss function used for the current task.
+
+\subsection{Training Procedure}
+\label{subsec:training}
+
+The complete \ours training procedure is summarized in \cref{alg:cmkl}.
+For each task $T_k$ in the continual sequence, the model first encodes all entities through the three modality-specific encoders and fuses their representations via cross-modal attention.
+The total training objective combines the task loss, MA-EWC regularization (for $k > 1$), and replay loss (for $k > 1$):
+\begin{equation}
+    \mathcal{L} = \mathcal{L}_{\text{task}} + \mathcal{L}_{\text{MA-EWC}} + \alpha \cdot \mathcal{L}_{\text{replay}},
+    \label{eq:total}
+\end{equation}
+where $\alpha$ controls the replay weight.
+After training on each task, per-modality Fisher matrices are computed and diverse exemplars are added to the memory buffer.
+
+\begin{algorithm}[t]
+\caption{\ours Training Procedure}
+\label{alg:cmkl}
+\begin{algorithmic}[1]
+\REQUIRE Task sequence $\mathcal{T} = \{T_1, \ldots, T_K\}$, modality features $\mathbf{X}$, buffer size $|\mathcal{M}|$
+\ENSURE Trained parameters $\theta = \{\theta_s, \theta_t, \theta_m, \theta_f\}$
+\STATE Initialize encoders, fusion module, decoder
+\STATE $\mathcal{M} \leftarrow \emptyset$ \COMMENT{Memory buffer}
+\FOR{$k = 1$ \TO $K$}
+    \STATE \textbf{// Encode entities with modality-specific encoders}
+    \STATE $\mathbf{H}^s \leftarrow \text{R-GCN}(\mathcal{V}_k, \mathcal{E}_k; \theta_s)$
+    \STATE $\mathbf{H}^t \leftarrow \text{BiomedBERT-Proj}(\mathbf{X}^{\text{text}}; \theta_t)$
+    \STATE $\mathbf{H}^m \leftarrow \text{MLP}(\mathbf{X}^{\text{mol}}; \theta_m)$
+    \STATE \textbf{// Fuse via cross-modal attention}
+    \STATE $\mathbf{H} \leftarrow \text{CrossAttn}(\mathbf{H}^s, \mathbf{H}^t, \mathbf{H}^m; \theta_f)$
+    \FOR{each epoch}
+        \STATE $\mathcal{L}_{\text{task}} \leftarrow$ link prediction loss on $T_k$ using decoder($\mathbf{H}$)
+        \IF{$k > 1$}
+            \STATE $\mathcal{L}_{\text{MA-EWC}} \leftarrow$ \cref{eq:maewc} with stored Fisher matrices and $\theta^*$
+            \STATE $\mathcal{L}_{\text{replay}} \leftarrow$ replay loss on sampled $\mathcal{B}_r \subset \mathcal{M}$
+        \ELSE
+            \STATE $\mathcal{L}_{\text{MA-EWC}} \leftarrow 0$; $\mathcal{L}_{\text{replay}} \leftarrow 0$
+        \ENDIF
+        \STATE $\mathcal{L} \leftarrow \mathcal{L}_{\text{task}} + \mathcal{L}_{\text{MA-EWC}} + \alpha \cdot \mathcal{L}_{\text{replay}}$
+        \STATE Update $\theta$ via Adam optimizer
+    \ENDFOR
+    \STATE \textbf{// Post-task: compute per-modality Fisher and update buffer}
+    \STATE Compute $\mathbf{F}^s, \mathbf{F}^t, \mathbf{F}^m, \mathbf{F}^f$ from squared gradients on $T_k$
+    \STATE Store $\theta^* \leftarrow \theta$
+    \STATE $\mathcal{M} \leftarrow \mathcal{M} \cup \text{K-means-Select}(\mathbf{H}^s, T_k, |\mathcal{M}|/k)$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}

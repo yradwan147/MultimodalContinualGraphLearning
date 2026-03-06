@@ -75,11 +75,29 @@ Existing CGL benchmarks use artificial temporal splits on generic KGs (FB15k-237
 - ICEWS: event-based temporal, not knowledge evolution
 - PrimeKG, TarKG: static biomedical KGs, no CL evaluation
 
-### Key results (from IBEX experiments)
-- All 6 baselines evaluated on 3 tasks with 5 seeds
-- Naive sequential shows significant forgetting
-- Joint training as upper bound
-- EWC and replay reduce forgetting
+### Key results (from IBEX experiments — Runs 1-3, all complete)
+
+**Link Prediction (10 tasks, 5 seeds each):**
+| Method | AP | AF | BWT | REM |
+|--------|-----|-----|------|------|
+| CMKL (DistMult) | 0.063 ± 0.003 | 0.040 ± 0.003 | -0.040 ± 0.003 | 0.960 ± 0.003 |
+| LKGE (TransE) | 0.039 ± 0.001 | 0.012 ± 0.002 | -0.010 ± 0.003 | 0.990 ± 0.003 |
+| Joint Training | 0.018 ± 0.000 | 0.000 | 0.000 | 1.000 |
+| Naive Sequential | 0.004 ± 0.000 | 0.021 ± 0.000 | -0.021 ± 0.000 | 0.980 ± 0.000 |
+| EWC | 0.004 ± 0.000 | 0.017 ± 0.001 | -0.017 ± 0.001 | 0.984 ± 0.001 |
+| Experience Replay | 0.004 ± 0.000 | 0.021 ± 0.000 | -0.021 ± 0.000 | 0.980 ± 0.000 |
+| RAG (Qwen2.5-7B) | 0.002 ± 0.001 | 0.001 ± 0.001 | -0.001 ± 0.001 | 0.999 ± 0.001 |
+
+**Node Classification (10 tasks, 5 seeds each):**
+| Method | AP | AF | BWT |
+|--------|-----|-----|------|
+| CMKL | 0.431 ± 0.005 | 0.004 ± 0.002 | -0.000 ± 0.002 |
+| Joint Training | 0.370 ± 0.002 | 0.003 ± 0.001 | 0.022 ± 0.003 |
+| EWC | 0.345 ± 0.004 | 0.008 ± 0.003 | 0.007 ± 0.004 |
+| Experience Replay | 0.344 ± 0.006 | 0.010 ± 0.003 | 0.006 ± 0.005 |
+| Naive Sequential | 0.344 ± 0.004 | 0.011 ± 0.002 | 0.003 ± 0.005 |
+
+**Note:** KGE baselines use custom eval (Run 3) that bypasses PyKEEN. CMKL/LKGE use separate eval paths. Discuss eval methodology differences in paper.
 
 ### Section mapping
 | Section | Source files |
@@ -264,6 +282,14 @@ Generate all 15 questions with `\answerYes{}`/`\answerNo{}`/`\answerNA{}` and ju
 - Liang et al. 2022 — Multimodal learning survey
 
 ---
+
+## Data & Evaluation Notes for Paper
+
+- **DrugBank/UMLS:** Newly acquired but not yet integrated into t1. Note as future work.
+- **Ablation studies:** Local smoke tests only; full IBEX runs pending. Omit from Paper A (benchmark focus).
+- **Multi-hop evaluation:** Code implemented but not run at scale. Mention as future benchmark extension.
+- **Eval methodology:** KGE baselines (Run 3) use custom pessimistic ranking against all 129K entities. CMKL uses its own all-entity scoring. LKGE uses internal eval. RAG uses exact entity name match. Discuss in experimental setup.
+- **82 result files** across 3 runs, 7 methods, LP + NC tasks.
 
 ## Completion Criteria
 - [ ] Complete LaTeX draft following SKILL.md spec

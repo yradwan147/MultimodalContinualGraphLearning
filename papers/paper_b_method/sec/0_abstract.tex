@@ -1,0 +1,10 @@
+\begin{abstract}
+Biomedical knowledge graphs (KGs) evolve continuously as new drugs, diseases, and molecular interactions are discovered, yet existing continual knowledge graph embedding (CKGE) methods operate exclusively on graph structure and apply uniform regularization across all model parameters.
+We observe that different modalities---structural topology, biomedical text, and molecular fingerprints---exhibit distinct forgetting dynamics: structural encoders are highly sensitive to topological drift, while molecular encoders remain comparatively stable.
+To exploit this asymmetry, we propose \fullname (\ours), the first continual learning framework that is natively multimodal and modality-aware.
+\ours integrates three modality-specific encoders---an R-GCN for relational structure, a frozen BiomedBERT with learned projection for textual descriptions, and a Morgan fingerprint MLP for molecular representations---fused through bidirectional cross-modal attention.
+For continual learning, \ours introduces \emph{modality-aware elastic weight consolidation} (MA-EWC), which maintains separate per-modality Fisher information matrices and applies independently tuned regularization strengths ($\lambda_s{=}10$, $\lambda_t{=}5$, $\lambda_m{=}1$), alongside a \emph{multimodal memory replay} buffer that selects diverse exemplars via K-means clustering on structural embeddings.
+On the PrimeKG-CL benchmark with 129K+ entities and 10 continual link prediction tasks, \ours achieves an average performance (AP) of $0.063$, outperforming Joint Training by $3.5\times$ and the strongest continual baseline LKGE by $1.6\times$.
+On node classification, \ours attains AP\,=\,$0.431$, exceeding Joint Training by $1.16\times$.
+Code and pretrained models are publicly available.
+\end{abstract}

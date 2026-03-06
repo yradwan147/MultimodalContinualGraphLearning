@@ -1,0 +1,19 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented \fullname (\ours), the first continual learning framework for knowledge graphs that is both natively multimodal and modality-aware.
+\ours integrates structural (R-GCN), textual (BiomedBERT), and molecular (Morgan fingerprint MLP) encoders through cross-modal attention, and protects previously learned knowledge via modality-aware EWC with per-modality Fisher matrices and multimodal memory replay with K-means diverse selection.
+On the PrimeKG-CL benchmark, \ours achieves AP\,=\,$0.063$ on link prediction ($3.5\times$ Joint Training, $1.6\times$ LKGE) and AP\,=\,$0.431$ on node classification ($1.16\times$ Joint Training), establishing new state-of-the-art performance for continual biomedical KG learning.
+
+\paragraph{Limitations.}
+Our work has several limitations that warrant transparency.
+First, ablation studies (modality ablation, decoder ablation, lambda sensitivity) have only been conducted at smoke-test scale; full-scale ablations are needed to confirm component contributions.
+Second, the decoder confound between DistMult (\ours) and TransE (baselines) means that some of the observed AP advantage may stem from the scoring function rather than the continual learning mechanisms.
+Third, our benchmark uses only two temporal snapshots ($t_0$, $t_1$); evaluating over longer time horizons with more snapshots would better characterize long-term forgetting behavior.
+Finally, the candidate filtering in DistMult evaluation (restricting to type-compatible entities) is not directly comparable to the all-entity evaluation used by TransE baselines, inflating certain task-specific metrics.
+
+\paragraph{Future Work.}
+We identify three directions for future investigation:
+(1)~full-scale ablation experiments with controlled decoder comparisons to isolate the contributions of multimodal encoding, MA-EWC, and diverse replay;
+(2)~extension to multi-hop reasoning evaluation, where multimodal features may provide even stronger advantages for complex inference chains; and
+(3)~integration of additional databases (DrugBank, UMLS) and a third temporal snapshot ($t_2$, February 2026) to stress-test continual learning over longer horizons.

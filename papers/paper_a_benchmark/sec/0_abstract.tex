@@ -1,0 +1,9 @@
+\begin{abstract}
+Biomedical knowledge graphs (KGs) evolve continuously as new drugs, diseases, and molecular interactions are discovered, yet existing continual graph learning (CGL) benchmarks rely on synthetic temporal splits of generic KGs such as FB15k-237 and WN18RR, failing to capture the complexities of real-world knowledge evolution.
+We introduce \ours, the first CGL benchmark grounded in a real biomedical KG with genuine temporal evolution.
+Built on \primekg, \ours spans two temporal snapshots (June 2021 and July 2023) reconstructed from nine authoritative biomedical databases, encompassing \textbf{129K+} nodes, \textbf{8.1M+} edges, \textbf{10} node types, \textbf{30} relation types, and \textbf{10} continual learning tasks organized by entity-type grouping.
+The benchmark supports three evaluation tracks---link prediction, knowledge graph question answering, and node classification---with multimodal node features including textual descriptions (BiomedBERT), molecular fingerprints (Morgan), and structural embeddings (R-GCN).
+We evaluate seven methods spanning naive sequential, joint training, EWC, experience replay, LKGE, a retrieval-augmented generation agent, and our proposed Cross-Modal Knowledge Learner (CMKL).
+CMKL achieves the highest average performance (AP\,=\,0.063), outperforming Joint Training by 3.5$\times$, while EWC reduces catastrophic forgetting (AF\,=\,0.017 vs.\ 0.021 for naive sequential).
+We release the benchmark, code, and all baselines to facilitate reproducible research in continual biomedical graph learning.
+\end{abstract}

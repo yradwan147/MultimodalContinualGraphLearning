@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{Comparison of \ours with existing continual graph learning benchmarks. \ours is the first to offer real temporal evolution on a biomedical KG with multimodal features and multiple evaluation tasks.}
+\label{tab:comparison}
+\small
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Benchmark} & \textbf{Domain} & \textbf{Real Temp.} & \textbf{Multimodal} & \textbf{\#Entities} & \textbf{\#Relations} & \textbf{\#Tasks} & \textbf{Eval Tasks} \\
+\midrule
+LKGE~\citep{Cui2023} & General & \xmark & \xmark & 15K & 237 & 5 & LP \\
+PS-CKGE~\citep{Wu2024} & General & \xmark & \xmark & 15K & 237 & 5 & LP \\
+ICEWS~\citep{GarciaDuran2018} & Political & \cmark & \xmark & 13K & 256 & -- & LP \\
+\midrule
+\textbf{\ours (ours)} & \textbf{Biomedical} & \cmark & \cmark & \textbf{129K+} & \textbf{30} & \textbf{10} & \textbf{LP, KGQA, NC} \\
+\bottomrule
+\end{tabular}
+\end{table}
