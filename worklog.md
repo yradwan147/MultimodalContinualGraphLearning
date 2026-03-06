@@ -1454,3 +1454,36 @@ All experiments complete (Runs 1-3, 82+ result files). Run 3: 20/20 KGE baseline
 1. Add benchmark overview figure when diagram is ready
 2. Proofread and polish language
 3. Add supplementary material section if needed for venue submission
+
+---
+
+## Remaining TODOs (for future sessions)
+
+### High Priority — Experiments
+1. **Multi-hop evaluation (Run 4):** Code exists in `src/evaluation/multihop.py` with `make_pykeen_score_fn()` and `make_cmkl_score_fn()`. Needs a standalone `scripts/run_multihop_eval.py` that loads saved checkpoints and scores 2-hop paths. No retraining needed — just load Run 1/3 checkpoints. Addresses Prof. Zhang's feedback on graph structure advantage.
+2. **Full ablation studies on IBEX:** 7 ablations defined in `scripts/run_ablations.py` (struct_only, text_only, concat_fusion, global_ewc, random_replay, buffer_size_sweep, lambda_sweep) + distillation. Only local smoke tests exist. Need SLURM submission with 5 seeds each.
+3. **Decoder-controlled ablation:** Run CMKL with TransE decoder (not just DistMult) to disentangle multimodal contribution from decoder architecture. Currently CMKL uses DistMult while all KGE baselines use TransE — part of the AP gap is from this confound.
+
+### High Priority — Data
+4. **Rebuild t1 with DrugBank + UMLS:** Files acquired (`drugbank_all_full_database.xml.zip`, `umls-2025AB-full.zip` in project root). Need to:
+   - Implement DrugBank XML parser in `src/data/kg_builder.py` (drug-drug, drug-target, drug-enzyme, drug-carrier, drug-transporter edges)
+   - Implement UMLS MRCONSO/MRREL parser for disease/phenotype mappings
+   - Enable `drugbank` and `umls` in `configs/t1_sources.yaml`
+   - Rebuild t1, recompute temporal diff, regenerate benchmark
+   - Rerun all experiments on expanded benchmark
+5. **Fix disease_phenotype_positive low count (661 edges):** HPOA cross-reference matching issue — investigate MONDO-OMIM mapping in `kg_builder.py`
+6. **Fix exposure_protein duplicates:** 17,940 total but only 6,951 unique (61% redundancy) — deduplicate in `src/data/task_sequence.py`
+
+### Medium Priority — Papers
+7. **Paper A figures:** Create benchmark pipeline diagram (fig:benchmark_overview), temporal evolution visualization (fig:temporal_evolution), task distribution chart, forgetting curves
+8. **Paper B figures:** Create CMKL architecture diagram (fig:overview), per-modality Fisher visualization, ablation bar charts (when data available)
+9. **Paper A supplementary:** Per-seed results tables, per-relation MRR breakdown, all hyperparameters, NeurIPS checklist
+10. **Paper B supplementary:** Algorithm details, sensitivity analysis figures, per-modality analysis
+11. **Proofread both papers:** Polish language, verify all numbers match docs/experiment-results.md, check cross-references
+12. **Add multi-hop results to papers:** After Run 4, add `tables/multihop_results.tex` to both papers and `\subsection{Multi-Hop Evaluation}` to experiments sections
+
+### Low Priority — Infrastructure
+13. **Notebooks 03 and 04:** Fill `notebooks/03_results_analysis.ipynb` and `notebooks/04_paper_figures.ipynb` with actual results analysis and figure generation
+14. **Run `scripts/merge_seed_results.py`:** Merge per-seed JSONs from results_run3/ into aggregated files in results/
+15. **Update `scripts/generate_tables.py`:** Generate LaTeX and Markdown tables from merged results automatically
+16. **Consider t2 (Feb 2026, PrimeKG-U):** Optional third temporal snapshot for 3-snapshot benchmark
