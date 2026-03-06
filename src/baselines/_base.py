@@ -224,25 +224,27 @@ def evaluate_link_prediction(
     model: torch.nn.Module,
     test_factory: TriplesFactory,
     device: str = "cpu",
-    batch_size: int = 256,
+    batch_size: int = 64,
     all_known_mapped_triples: torch.Tensor | None = None,
     max_test_triples: int = 50_000,
 ) -> dict[str, float]:
     """Evaluate model on a test set using rank-based metrics.
 
-    Computes MRR, Hits@1, Hits@3, Hits@10 using PyKEEN's evaluator
-    with filtered ranking (standard protocol). Known true triples are
-    excluded from candidate rankings to avoid penalizing valid predictions.
+    Computes MRR, Hits@1, Hits@3, Hits@10 with filtered ranking.
+    Uses direct embedding extraction and manual scoring (bypasses
+    PyKEEN's RankBasedEvaluator to avoid CUDA segfaults with large
+    entity sets).
 
-    If the test set exceeds max_test_triples, a random subset is sampled
-    to avoid OOM/segfault on very large test sets (e.g. task_0_base with
-    1.6M test triples and 123K entities).
+    For each test triple (h, r, t):
+    - Score all entities as potential tails: score(h, r, e) for all e
+    - Filter out known true tails (except the test triple itself)
+    - Rank the true tail among remaining entities
 
     Args:
-        model: Trained PyKEEN model.
+        model: Trained PyKEEN model (TransE or DistMult).
         test_factory: TriplesFactory for test data.
         device: Device for evaluation.
-        batch_size: Evaluation batch size.
+        batch_size: Evaluation batch size (default 64 for safety).
         all_known_mapped_triples: Concatenated train+val+test triples from
             all tasks for filtered ranking. If None, uses raw ranking.
         max_test_triples: Maximum test triples to evaluate. Larger sets
@@ -251,7 +253,7 @@ def evaluate_link_prediction(
     Returns:
         Dict with MRR, Hits@1, Hits@3, Hits@10.
     """
-    from pykeen.evaluation import RankBasedEvaluator
+    from pykeen.models import TransE as TransEModel
 
     mapped_triples = test_factory.mapped_triples
     if mapped_triples.shape[0] > max_test_triples:
@@ -265,26 +267,85 @@ def evaluate_link_prediction(
     _log_mem(f"before eval ({mapped_triples.shape[0]:,} test triples)")
     model = model.to(device)
     model.eval()
-    evaluator = RankBasedEvaluator()
 
-    filter_triples = None
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    # Extract embeddings directly from PyKEEN model
+    with torch.no_grad():
+        entity_emb = model.entity_representations[0](indices=None).to(device)
+        relation_emb = model.relation_representations[0](indices=None).to(device)
+
+    # Detect model type for scoring
+    is_transe = isinstance(model, TransEModel)
+    p_norm = 1
+    if is_transe and hasattr(model.interaction, "p"):
+        p_norm = model.interaction.p
+
+    # Build filter: for each (h, r), collect known tail entities
+    hr_to_tails: dict[tuple[int, int], set[int]] = {}
     if all_known_mapped_triples is not None:
-        filter_triples = all_known_mapped_triples.to(device)
+        known_np = all_known_mapped_triples.cpu().numpy()
+        for i in range(known_np.shape[0]):
+            key = (int(known_np[i, 0]), int(known_np[i, 1]))
+            if key not in hr_to_tails:
+                hr_to_tails[key] = set()
+            hr_to_tails[key].add(int(known_np[i, 2]))
 
-    results = evaluator.evaluate(
-        model=model,
-        mapped_triples=mapped_triples.to(device),
-        additional_filter_triples=filter_triples,
-        batch_size=batch_size,
-    )
+    ranks = []
+    test_t = mapped_triples.to(device)
+
+    with torch.no_grad():
+        for start in range(0, len(test_t), batch_size):
+            batch = test_t[start:start + batch_size]
+            heads = batch[:, 0]
+            rels = batch[:, 1]
+            tails = batch[:, 2]
+            B = heads.shape[0]
+
+            h_emb = entity_emb[heads]   # [B, D]
+            r_emb = relation_emb[rels]  # [B, D]
+
+            # Score all entities as tails
+            if is_transe:
+                query = h_emb + r_emb  # [B, D]
+                all_scores = -torch.cdist(query, entity_emb, p=p_norm)  # [B, N]
+            else:
+                # DistMult / default: element-wise product
+                query = h_emb * r_emb  # [B, D]
+                all_scores = query @ entity_emb.T  # [B, N]
+
+            # Filtered ranking: mask known tails except the true one
+            if hr_to_tails:
+                for b_idx in range(B):
+                    h_val = heads[b_idx].item()
+                    r_val = rels[b_idx].item()
+                    t_val = tails[b_idx].item()
+                    known = hr_to_tails.get((h_val, r_val), set())
+                    if known:
+                        mask_ids = [t for t in known if t != t_val]
+                        if mask_ids:
+                            all_scores[b_idx, mask_ids] = float("-inf")
+
+            # Compute rank of true tail (pessimistic: ties count against)
+            true_scores = all_scores[torch.arange(B, device=device), tails]
+            batch_ranks = (
+                (all_scores >= true_scores.unsqueeze(1)).sum(dim=1).float()
+            )
+            ranks.extend(batch_ranks.cpu().tolist())
+
     _log_mem("after eval")
 
-    # Extract realistic (pessimistic) metrics
+    if not ranks:
+        return {"MRR": 0.0, "Hits@1": 0.0, "Hits@3": 0.0, "Hits@10": 0.0}
+
+    ranks_arr = np.array(ranks)
+    rr = 1.0 / ranks_arr
     metrics = {
-        "MRR": results.get_metric("both.realistic.inverse_harmonic_mean_rank"),
-        "Hits@1": results.get_metric("both.realistic.hits_at_1"),
-        "Hits@3": results.get_metric("both.realistic.hits_at_3"),
-        "Hits@10": results.get_metric("both.realistic.hits_at_10"),
+        "MRR": float(np.mean(rr)),
+        "Hits@1": float(np.mean(ranks_arr <= 1)),
+        "Hits@3": float(np.mean(ranks_arr <= 3)),
+        "Hits@10": float(np.mean(ranks_arr <= 10)),
     }
     return metrics
 

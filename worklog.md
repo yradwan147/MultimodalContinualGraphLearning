@@ -1202,3 +1202,99 @@ These were among the 7 disabled sources in `configs/t1_sources.yaml` (drugbank, 
 3. After completion: merge results, generate tables
 4. **Run 3:** Standalone multi-hop evaluation on saved checkpoints (see above)
 5. **Future rerun:** Rebuild t1 with DrugBank + UMLS data, rerun all experiments on expanded benchmark
+
+---
+
+## 2026-03-06 Session — Run 2 Analysis
+
+### Run 2 Results (22 jobs resubmitted)
+- **6/22 succeeded:** joint_training seed 123, RAG all 5 seeds (with Qwen2.5-7B LLM)
+- **16/22 segfaulted:** All naive_seq (5), EWC (5), replay (5), JT seed 456
+- **0 timeouts:** RAG 48h fix worked
+
+### New Results Obtained
+- **Joint Training seed 123:** AP=0.0202, consistent with other seeds (mean 0.020 ± 0.000)
+- **RAG Full Agent (5/5 seeds):** AP=0.0022 ± 0.0013 — near-zero as expected (RAG can't do LP)
+  - Most matrix entries are exactly 0.0 — LLM rarely generates exact entity names
+  - Only disease_related, gene_protein, phenotype_related occasionally get nonzero MRR
+  - Establishes RAG as lower bound for LP comparison
+
+### Critical Issue: PyKEEN Segfault Persists
+The `max_test_triples=50K` fix was **insufficient**:
+- Segfault is in PyKEEN's all-entity scoring (shape `batch x 129K`), not # test triples
+- Non-deterministic: jt_s123 succeeded, jt_s456 segfaulted on same code with SMALLER test set
+- GPU memory was only 2-2.4 GB at crash (V100 has 32 GB) — not simple OOM
+- Crash always at 0% eval progress, first batch
+
+### Proposed Fix for Run 3
+Need to bypass PyKEEN's evaluator entirely:
+1. **Type-constrained evaluation** — only rank against entities of correct type (5K-15K vs 129K)
+2. **Custom eval function** — score `(h, r, ?)` with chunked entity batching
+3. **Reduce eval batch_size** to 32 (currently 512)
+4. Any combination of the above
+
+### Docs Updated
+- `docs/run2_report.md`: NEW — full analysis report
+- `docs/experiment-results.md`: Updated with combined Run 1+2 results
+
+### Current Completion Status
+| Task | Complete | Missing |
+|------|----------|---------|
+| CMKL LP | 5/5 | — |
+| LKGE LP | 5/5 | — |
+| Joint Training LP | 4/5 | seed 456 |
+| RAG LP | 5/5 | — |
+| Naive Sequential LP | 0/5 | ALL (segfault) |
+| EWC LP | 0/5 | ALL (segfault) |
+| Experience Replay LP | 0/5 | ALL (segfault) |
+| NC (all 5 methods) | 25/25 | — |
+
+### Next Steps
+1. **Fix PyKEEN eval** — implement custom/type-constrained evaluation to bypass segfault
+2. **Run 3:** Resubmit 16 failed KGE baselines + JT seed 456 + multi-hop eval
+3. After Run 3: merge all results, generate paper tables
+4. Ablation studies on IBEX
+5. Future: rebuild t1 with DrugBank + UMLS
+
+---
+
+## 2026-03-06 Session — Run 3 Prep: Custom Evaluation (Bypass PyKEEN Segfault)
+
+### Root Cause
+PyKEEN's `RankBasedEvaluator` segfaults non-deterministically when scoring 129K entities.
+The `max_test_triples=50K` fix only reduced rows; the 129K entity columns are the actual problem.
+CMKL's custom `_evaluate_mrr()` does the same all-entity scoring but works perfectly
+because it uses direct PyTorch operations instead of PyKEEN's evaluator infrastructure.
+
+### Changes Made
+- `src/baselines/_base.py`: Rewrote `evaluate_link_prediction()` to bypass PyKEEN's `RankBasedEvaluator`:
+  - Extracts entity/relation embeddings directly from PyKEEN model
+  - Scores all entities manually (TransE: cdist, DistMult: dot product)
+  - Builds hr_to_tails filter dict for filtered ranking
+  - Computes MRR, Hits@1, Hits@3, Hits@10 from ranks
+  - Calls `torch.cuda.empty_cache()` before eval, batch_size=64 (was 256)
+  - No PyKEEN evaluator import at all
+- `slurm/submit_run3.sh`: NEW — submits 20 KGE baseline LP jobs (4 methods × 5 seeds)
+- `.claude-plans/phase5.8-run3-fix-pykeen-segfault.md`: NEW — plan doc
+- `docs/run2_report.md`: NEW — Run 2 analysis
+- `docs/experiment-results.md`: Updated with Run 1+2 combined results
+
+### Consistency Note
+Since `evaluate_link_prediction()` was rewritten, ALL KGE baselines must rerun:
+- Joint Training: all 5 seeds (4 existed, rerun for consistency per user request)
+- Naive Sequential: all 5 seeds (never completed)
+- EWC: all 5 seeds (never completed)
+- Experience Replay: all 5 seeds (never completed)
+Total: 20 jobs. CMKL/LKGE/RAG/NC unaffected (different eval paths).
+
+### Smoke Test
+- TransE custom eval on 100 entities: MRR=0.018, Hits@1-10 valid ✓
+- DistMult custom eval on 100 entities: MRR=0.025, all assertions pass ✓
+
+### Next Steps
+1. Push to GitHub, pull on IBEX
+2. Run `bash slurm/submit_run3.sh` (20 jobs)
+3. After completion: merge results, generate paper tables
+4. Multi-hop evaluation as standalone post-hoc (Run 4)
+5. Ablation studies
+6. Future: rebuild t1 with DrugBank + UMLS
